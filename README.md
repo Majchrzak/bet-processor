@@ -1,1 +1,1 @@
-# bet-aggregator
+# bet-processor
