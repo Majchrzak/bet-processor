@@ -14,8 +14,11 @@
   "files": [
     "dist"
   ],
+  "dependencies": {
+    "zod": "^4.5.4"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json --resolve-full-paths --resolve-full-extension .js",
     "lint": "eslint .",
     "test": "vitest run --config ../../vitest.config.ts --root .",
     "typecheck": "tsc --noEmit -p tsconfig.json"

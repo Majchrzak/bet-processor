@@ -10,7 +10,6 @@
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
   "exclude": [
-    "test"
+    "src/**/*.test.ts"
   ]
 }
-
