@@ -13,7 +13,9 @@ export async function startServer(): Promise<FastifyInstance> {
   };
 
   const shutdown = (signal: "SIGINT" | "SIGTERM"): void => {
-    if (shutdownPromise !== undefined) return;
+    if (shutdownPromise) {
+      return;
+    }
 
     app.log.info({ signal }, "shutting down");
     removeShutdownHandlers();
