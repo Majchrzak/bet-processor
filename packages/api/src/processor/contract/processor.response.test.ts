@@ -3,14 +3,14 @@ import { z } from "zod";
 
 import {
   ErrorResponseSchema,
-  ProcessResponseSchema,
+  ProcessorResponseSchema,
   type ErrorResponse,
-} from "./process.response";
+} from "./processor.response";
 
-describe("ProcessResponseSchema", () => {
+describe("ProcessorResponseSchema", () => {
   it("accepts string transaction IDs without requiring UUIDs", () => {
     expect(
-      ProcessResponseSchema.parse({
+      ProcessorResponseSchema.parse({
         balance: 100,
         transactions: [{ action_id: "action-1", tx_id: "transaction-1" }],
       }),
@@ -21,11 +21,11 @@ describe("ProcessResponseSchema", () => {
   });
 
   it("rejects negative and unsafe balances", () => {
-    expect(() => ProcessResponseSchema.parse({ balance: -1 })).toThrow(
+    expect(() => ProcessorResponseSchema.parse({ balance: -1 })).toThrow(
       z.ZodError,
     );
     expect(() =>
-      ProcessResponseSchema.parse({
+      ProcessorResponseSchema.parse({
         balance: Number.MAX_SAFE_INTEGER + 1,
       }),
     ).toThrow(z.ZodError);

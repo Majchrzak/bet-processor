@@ -4,7 +4,10 @@ import { Pool } from "pg";
 
 import { createDeterministicKey } from "../src/deterministic-key";
 import { createHmacSha256Digest } from "../src/hmac";
-import { ErrorResponseSchema, ProcessResponseSchema } from "../src/process";
+import {
+  ErrorResponseSchema,
+  ProcessorResponseSchema,
+} from "../src/processor/contract/processor.response";
 
 describe("bet processor HTTP integration", () => {
   let fixtures: Awaited<ReturnType<typeof getFixtures>>;
@@ -416,7 +419,7 @@ async function getFixtures() {
 
     then: {
       async succeeded(response: Response, expected: unknown) {
-        const body = ProcessResponseSchema.parse(await response.json());
+        const body = ProcessorResponseSchema.parse(await response.json());
 
         expect(response.status).toEqual(200);
         expect(body).toEqual(expected);

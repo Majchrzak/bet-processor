@@ -1,13 +1,16 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
 
-import { ProcessRequestSchema, type ProcessRequest } from "./process.request";
+import {
+  ProcessorRequestSchema,
+  type ProcessorRequest,
+} from "./processor.request";
 
 const ACTION_ID = "action-1";
 
-describe("ProcessRequestSchema", () => {
+describe("ProcessorRequestSchema", () => {
   it("accepts strict actions and infers the request type", () => {
-    const request = ProcessRequestSchema.parse({
+    const request = ProcessorRequestSchema.parse({
       user_id: "player-000001",
       currency: "USD",
       game: "slots",
@@ -16,7 +19,7 @@ describe("ProcessRequestSchema", () => {
       actions: [{ action: "bet", action_id: ACTION_ID, amount: 100 }],
     });
 
-    expectTypeOf(request).toEqualTypeOf<ProcessRequest>();
+    expectTypeOf(request).toEqualTypeOf<ProcessorRequest>();
   });
 
   it.each([
@@ -31,7 +34,7 @@ describe("ProcessRequestSchema", () => {
     { action: "bet", action_id: ACTION_ID, amount: 100, surprise: true },
   ])("rejects an invalid action: $action", (action) => {
     expect(() =>
-      ProcessRequestSchema.parse({
+      ProcessorRequestSchema.parse({
         user_id: "player",
         currency: "USD",
         game: "slots",
@@ -43,7 +46,7 @@ describe("ProcessRequestSchema", () => {
 
   it("rejects unknown request fields", () => {
     expect(() =>
-      ProcessRequestSchema.parse({
+      ProcessorRequestSchema.parse({
         user_id: "player",
         currency: "USD",
         game: "slots",

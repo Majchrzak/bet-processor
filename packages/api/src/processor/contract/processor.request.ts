@@ -17,7 +17,7 @@ export const RollbackActionSchema = z
   })
   .strict();
 
-export const ProcessRequestSchema = z
+export const ProcessorRequestSchema = z
   .object({
     user_id: z.string().trim().min(1).max(255),
     currency: z.string().trim().min(1).max(16),
@@ -37,4 +37,4 @@ export const ProcessRequestSchema = z
 
 export type MoneyAction = z.infer<typeof MoneyActionSchema>;
 export type RollbackAction = z.infer<typeof RollbackActionSchema>;
-export type ProcessRequest = z.infer<typeof ProcessRequestSchema>;
+export type ProcessorRequest = z.infer<typeof ProcessorRequestSchema>;

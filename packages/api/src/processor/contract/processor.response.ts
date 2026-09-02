@@ -1,7 +1,7 @@
 import "zod/compile";
 import { z } from "zod";
 
-export const ProcessResponseSchema = z
+export const ProcessorResponseSchema = z
   .object({
     balance: z.number().int().nonnegative(),
     game_id: z.string().trim().min(1).max(255).optional(),
@@ -23,5 +23,5 @@ export const ErrorResponseSchema = z
   })
   .strict();
 
-export type ProcessResponse = z.infer<typeof ProcessResponseSchema>;
+export type ProcessorResponse = z.infer<typeof ProcessorResponseSchema>;
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
