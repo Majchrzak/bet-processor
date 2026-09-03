@@ -299,13 +299,14 @@ async function getFixtures() {
   const database = new Pool({
     connectionString:
       process.env.BET_PROCESSOR_DATABASE_URL ??
-      "postgresql://postgres:postgres@localhost:5432/bet_processor",
+      "postgresql://postgres:development-db-password@localhost:5432/bet_processor",
   });
 
   const apiUrl =
     process.env.BET_PROCESSOR_ACCEPTANCE_API_URL ?? "http://localhost:3000";
 
-  const hmacSecret = process.env.BET_PROCESSOR_HMAC_SECRET ?? "test";
+  const hmacSecret =
+    process.env.BET_PROCESSOR_HMAC_SECRET ?? "development-hmac-secret";
 
   async function cleanup() {
     const client = await database.connect();

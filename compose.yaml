@@ -1,0 +1,79 @@
+name: bet-processor
+
+x-api-image: &api-image
+  image: bet-processor-api:local
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: runtime
+
+x-api-environment: &api-environment
+  BET_PROCESSOR_DATABASE_URL: ${BET_PROCESSOR_DATABASE_URL:-postgresql://postgres:development-db-password@database:5432/bet_processor}
+  BET_PROCESSOR_DB_POOL_SIZE: ${BET_PROCESSOR_DB_POOL_SIZE:-10}
+  BET_PROCESSOR_DB_STATEMENT_TIMEOUT_MS: ${BET_PROCESSOR_DB_STATEMENT_TIMEOUT_MS:-30000}
+  BET_PROCESSOR_HMAC_SECRET: ${BET_PROCESSOR_HMAC_SECRET:-development-hmac-secret}
+  BET_PROCESSOR_HOST: ${BET_PROCESSOR_HOST:-0.0.0.0}
+  BET_PROCESSOR_LOG_LEVEL: ${BET_PROCESSOR_LOG_LEVEL:-info}
+  BET_PROCESSOR_MAX_ACTIONS_PER_REQUEST: ${BET_PROCESSOR_MAX_ACTIONS_PER_REQUEST:-1000}
+  BET_PROCESSOR_PORT: ${BET_PROCESSOR_PORT:-3000}
+  BET_PROCESSOR_REQUEST_BODY_LIMIT_BYTES: ${BET_PROCESSOR_REQUEST_BODY_LIMIT_BYTES:-1048576}
+  BET_PROCESSOR_RTP_MAX_RANGE_DAYS: ${BET_PROCESSOR_RTP_MAX_RANGE_DAYS:-3660}
+
+services:
+  database:
+    image: timescale/timescaledb:2.29.2-pg17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bet_processor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-development-db-password}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      TIMESCALEDB_TELEMETRY: "off"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./.docker/bet-processor-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - test "$$(head -n 1 "$${PGDATA}/postmaster.pid")" = "1" && pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  migrate:
+    <<: *api-image
+    command:
+      - node
+      - node_modules/typeorm/cli.js
+      - migration:run
+      - --dataSource
+      - dist/typeorm.config.js
+    environment: *api-environment
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *api-image
+    environment: *api-environment
+    ports:
+      - "${API_PORT:-3000}:${BET_PROCESSOR_PORT:-3000}"
+    depends_on:
+      database:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:'+(process.env.BET_PROCESSOR_PORT??'3000')+'/health').then(response=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    init: true
+    restart: unless-stopped
