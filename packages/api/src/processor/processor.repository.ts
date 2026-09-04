@@ -1,12 +1,16 @@
 import "zod/compile";
+import type { DataSource } from "typeorm";
 import { z } from "zod";
 
 import { createDeterministicKey } from "../deterministic-key";
+import type { TimeProvider } from "../time";
 import type { ProcessorRequest } from "./contract/processor.request";
 import {
   ProcessorResponseSchema,
   type ProcessorResponse,
 } from "./contract/processor.response";
+
+const sql = String.raw;
 
 const DatabaseBalanceSchema = z
   .object({ balance: z.string().regex(/^\d+$/) })
@@ -21,27 +25,20 @@ const ProcessedActionsRowSchema = DatabaseBalanceSchema.extend({
   ),
 }).strict();
 
-export interface ProcessorDataSource {
-  query(sql: string, parameters?: unknown[]): Promise<unknown>;
-}
-
-export interface ProcessorRepository {
-  getBalance: (
-    request: ProcessorRequest,
-  ) => Promise<ProcessorResponse | undefined>;
-  process: (
-    request: ProcessorRequest,
-  ) => Promise<ProcessorResponse | undefined>;
-}
+export const WalletNotFoundDatabaseError = "BP001";
+export const InsufficientFundsDatabaseError = "BP002";
+export const GameAlreadyFinishedDatabaseError = "BP003";
 
 export function createProcessorRepository(
-  dataSource: ProcessorDataSource,
-  now: () => Date = () => new Date(),
-): ProcessorRepository {
+  dataSource: DataSource,
+  timeProvider: TimeProvider,
+) {
   return {
-    async getBalance(request: ProcessorRequest) {
+    async getBalance(
+      request: ProcessorRequest,
+    ): Promise<ProcessorResponse | undefined> {
       const rows: unknown = await dataSource.query(
-        `
+        sql`
           SELECT balance
           FROM wallet
           WHERE id = $1
@@ -59,7 +56,9 @@ export function createProcessorRepository(
         : undefined;
     },
 
-    async process(request: ProcessorRequest) {
+    async process(
+      request: ProcessorRequest,
+    ): Promise<ProcessorResponse | undefined> {
       if (!request.actions?.length) {
         throw new Error(
           "At least one action is required for action processing",
@@ -96,29 +95,29 @@ export function createProcessorRepository(
             : undefined,
       }));
 
-      const rows = await dataSource.query(
-        `
-          SELECT balance, transactions
-          FROM process_game_actions(
-            $1, $2, $3,
-            $4, $5, $6,
-            $7, $8::jsonb, $9::timestamptz
-          )
-        `,
-        [
-          request.user_id,
-          request.currency,
-          walletId,
-          request.game,
-          request.game_id,
-          gameRoundId,
-          request.finished === true,
-          JSON.stringify(actions),
-          now(),
-        ],
+      const [result] = z.array(ProcessedActionsRowSchema).parse(
+        await dataSource.query(
+          sql`
+            SELECT balance, transactions
+            FROM process_game_actions(
+              $1, $2, $3,
+              $4, $5, $6,
+              $7, $8::jsonb, $9::timestamptz
+            )
+          `,
+          [
+            request.user_id,
+            request.currency,
+            walletId,
+            request.game,
+            request.game_id,
+            gameRoundId,
+            request.finished === true,
+            JSON.stringify(actions),
+            timeProvider(),
+          ],
+        ),
       );
-
-      const [result] = z.array(ProcessedActionsRowSchema).parse(rows);
 
       if (!result) {
         throw new Error("Action processing returned no result");

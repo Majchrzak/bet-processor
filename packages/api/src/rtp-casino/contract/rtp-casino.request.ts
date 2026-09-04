@@ -3,8 +3,8 @@ import { z } from "zod";
 
 export const CasinoRtpReportQuerySchema = z
   .object({
-    from: z.iso.datetime({ precision: 3 }),
-    to: z.iso.datetime({ precision: 3 }),
+    from: z.iso.datetime({ offset: true }),
+    to: z.iso.datetime({ offset: true }),
   })
   .strict();
 

@@ -16,7 +16,9 @@ export function verifyHmacSha256Digest(
   secret: string,
   digest: string,
 ): boolean {
-  if (!/^[a-fA-F0-9]{64}$/u.test(digest)) return false;
+  if (!/^[a-fA-F0-9]{64}$/u.test(digest)) {
+    return false;
+  }
 
   const expected = Buffer.from(createHmacSha256Digest(body, secret), "hex");
   const received = Buffer.from(digest, "hex");
@@ -28,7 +30,9 @@ export function verifyHmacSha256Authorization(
   secret: string,
   authorization: string | undefined,
 ): boolean {
-  if (authorization === undefined) return false;
+  if (authorization === undefined) {
+    return false;
+  }
 
   const match = HMAC_SHA256_AUTHORIZATION_PATTERN.exec(authorization);
   const digest = match?.[1];

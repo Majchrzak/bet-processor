@@ -3,11 +3,10 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { config } from "./config";
 import { createDataSource } from "./database";
 import { verifyHmacSha256Authorization } from "./hmac";
-import {
-  createProcessHandler,
-  createProcessorRepository,
-  type ProcessorRequest,
-} from "./processor";
+import { createProcessHandler } from "./processor/processor.handler";
+import { createCasinoRtpHandler } from "./rtp-casino/rtp-casino.handler";
+import { createUserRtpHandler } from "./rtp-users/rtp-users.handler";
+import { systemTimeProvider } from "./time";
 
 const EMPTY_BODY = Buffer.alloc(0);
 const rawRequestBodies = new WeakMap<FastifyRequest, Buffer>();
@@ -44,9 +43,6 @@ export function buildApp(): FastifyInstance {
   });
 
   const dataSource = createDataSource();
-  const processHandler = createProcessHandler(
-    createProcessorRepository(dataSource),
-  );
 
   app.addHook("onReady", async () => {
     await dataSource.initialize();
@@ -64,10 +60,9 @@ export function buildApp(): FastifyInstance {
       isAuthorized(request, BET_PROCESSOR_HMAC_SECRET)
     ) {
       done();
-      return;
+    } else {
+      reply.code(403).send({ message: "Forbidden" });
     }
-
-    void reply.code(403).send({ message: "Forbidden" });
   });
 
   app.removeContentTypeParser("application/json");
@@ -87,9 +82,11 @@ export function buildApp(): FastifyInstance {
   );
 
   app.get("/health", () => ({ status: "ok" as const }));
-  app.post<{ Body: ProcessorRequest }>(
+  app.get("/reports/rtp/users", createUserRtpHandler(dataSource));
+  app.get("/reports/rtp/casino", createCasinoRtpHandler(dataSource));
+  app.post(
     "/aggregator/takehome/process",
-    (request, reply) => processHandler.handle(request, reply),
+    createProcessHandler(dataSource, systemTimeProvider),
   );
 
   return app;

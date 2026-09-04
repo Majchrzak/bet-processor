@@ -4,13 +4,20 @@ import { z } from "zod";
 import { UserRtpReportQuerySchema } from "./rtp-users.request";
 
 describe("UserRtpReportQuerySchema", () => {
-  it("requires exact datetimes and defaults the page limit", () => {
+  it.each([
+    ["2026-01-02T03:04:05Z", "2026-01-03T03:04:05Z"],
+    ["2026-01-02T03:04:05.006Z", "2026-01-03T03:04:05.006Z"],
+    ["2026-01-02T04:04:05+01:00", "2026-01-03T04:04:05+01:00"],
+  ])("accepts ISO datetimes and defaults the page limit", (from, to) => {
     expect(
       UserRtpReportQuerySchema.parse({
-        from: "2026-01-02T03:04:05.006Z",
-        to: "2026-01-03T03:04:05.006Z",
+        from,
+        to,
       }).limit,
     ).toBe(100);
+  });
+
+  it("rejects a date without a time and timezone", () => {
     expect(() =>
       UserRtpReportQuerySchema.parse({
         from: "2026-01-02",

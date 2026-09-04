@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const LogLevelSchema = z.enum([
+const LogLevelSchema = z.enum([
   "fatal",
   "error",
   "warn",
@@ -10,7 +10,7 @@ export const LogLevelSchema = z.enum([
   "silent",
 ]);
 
-export const ConfigSchema = z
+const ConfigSchema = z
   .object({
     BET_PROCESSOR_DATABASE_URL: z
       .url()
@@ -34,7 +34,7 @@ export const ConfigSchema = z
       .default(30_000),
     BET_PROCESSOR_HMAC_SECRET: z.string().min(1),
     BET_PROCESSOR_HOST: z.string().min(1).default("0.0.0.0"),
-    BET_PROCESSOR_LOG_LEVEL: LogLevelSchema.default("info"),
+    BET_PROCESSOR_LOG_LEVEL: LogLevelSchema.default("warn"),
     BET_PROCESSOR_MAX_ACTIONS_PER_REQUEST: z.coerce
       .number()
       .int()

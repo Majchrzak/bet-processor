@@ -3,6 +3,7 @@ import { DataSource } from "typeorm";
 import { config } from "./config";
 import { AddGameTables1788217200000 } from "./migrations/1788217200000-add-game-tables";
 import { ProcessGameActions1788303600000 } from "./migrations/1788303600000-process-game-actions";
+import { AddRtpAggregatesAndRetention1788390000000 } from "./migrations/1788390000000-add-rtp-aggregates-and-retention";
 
 export function createDataSource(): DataSource {
   const {
@@ -17,6 +18,7 @@ export function createDataSource(): DataSource {
     migrations: [
       AddGameTables1788217200000,
       ProcessGameActions1788303600000,
+      AddRtpAggregatesAndRetention1788390000000,
     ],
     migrationsTableName: "typeorm_migrations",
     poolSize: BET_PROCESSOR_DB_POOL_SIZE,

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createDataSource } from "./database";
 import { AddGameTables1788217200000 } from "./migrations/1788217200000-add-game-tables";
 import { ProcessGameActions1788303600000 } from "./migrations/1788303600000-process-game-actions";
+import { AddRtpAggregatesAndRetention1788390000000 } from "./migrations/1788390000000-add-rtp-aggregates-and-retention";
 
 describe(createDataSource.name, () => {
   it("registers the fresh financial migration and runtime pool settings", () => {
@@ -21,6 +22,7 @@ describe(createDataSource.name, () => {
       migrations: [
         AddGameTables1788217200000,
         ProcessGameActions1788303600000,
+        AddRtpAggregatesAndRetention1788390000000,
       ],
       migrationsTableName: "typeorm_migrations",
       poolSize: 25,

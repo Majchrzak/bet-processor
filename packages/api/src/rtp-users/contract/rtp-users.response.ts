@@ -1,16 +1,27 @@
 import "zod/compile";
 import { z } from "zod";
 
-const NonNegativeDecimalIntegerSchema = z.string().regex(/^(?:0|[1-9]\d*)$/u);
+const NonNegativeSafeIntegerSchema = z
+  .number()
+  .int()
+  .nonnegative()
+  .max(Number.MAX_SAFE_INTEGER);
+const SignedSafeIntegerSchema = z
+  .number()
+  .int()
+  .min(Number.MIN_SAFE_INTEGER)
+  .max(Number.MAX_SAFE_INTEGER);
 
 export const UserRtpReportRowSchema = z
   .object({
     user_id: z.string().trim().min(1).max(255),
     currency: z.string().trim().min(1).max(16),
-    rounds: NonNegativeDecimalIntegerSchema,
-    total_bet: NonNegativeDecimalIntegerSchema,
-    total_win: NonNegativeDecimalIntegerSchema,
-    rtp: z.number().nonnegative().nullable(),
+    rounds: NonNegativeSafeIntegerSchema,
+    total_bet: SignedSafeIntegerSchema,
+    total_win: SignedSafeIntegerSchema,
+    rolled_back_bet: NonNegativeSafeIntegerSchema,
+    rolled_back_win: NonNegativeSafeIntegerSchema,
+    rtp: z.number().nullable(),
   })
   .strict();
 

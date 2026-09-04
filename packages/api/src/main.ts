@@ -24,10 +24,10 @@ export async function startServer(): Promise<FastifyInstance> {
     });
   };
 
-  const onSigint = (): void => {
+  const onSigint = () => {
     shutdown("SIGINT");
   };
-  const onSigterm = (): void => {
+  const onSigterm = () => {
     shutdown("SIGTERM");
   };
 
