@@ -2,13 +2,13 @@ import type { Command } from "commander";
 import { Pool } from "pg";
 import { z } from "zod";
 
-import { createSeedUserId, createWalletId, userIdPrefix } from "../identifiers";
+import { createSeedUserId, createWalletId } from "../identifiers";
 import { parseSeedConfig, type SeedConfig } from "./seed.config";
 
 type SeedOptions = Parameters<typeof parseSeedConfig>[0];
 
 export function registerSeedCommand(program: Command): void {
-  const seedCommand = program
+  const command = program
     .command("seed")
     .description("idempotently seed deterministic wallets")
     .option("--database-url <url>", "PostgreSQL connection URL")
@@ -17,21 +17,20 @@ export function registerSeedCommand(program: Command): void {
     .option("--balance <minor-units>", "initial wallet balance in minor units")
     .option("--namespace <value>", "deterministic user namespace");
 
-  seedCommand.action(async (options: SeedOptions) => {
+  command.action(async (options: SeedOptions) => {
     let config: SeedConfig;
     try {
       config = parseSeedConfig(options);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        seedCommand.error(z.prettifyError(error));
+        command.error(z.prettifyError(error));
       }
       throw error;
     }
 
-    const result = await runSeedCommand(config);
-    const message = `Seeded ${String(result.walletCount)} ${result.currency} wallets with prefix ${JSON.stringify(result.userIdPrefix)} and balance ${String(result.balance)}.`;
+    await runSeedCommand(config);
 
-    console.log(message);
+    console.log("done");
   });
 }
 
@@ -59,13 +58,6 @@ export async function runSeedCommand(config: SeedConfig) {
     `,
       [ids, config.playerBalance, seededAt],
     );
-
-    return {
-      balance: config.playerBalance,
-      currency: config.currency,
-      userIdPrefix: userIdPrefix(config.namespace),
-      walletCount: config.playerCount,
-    };
   } finally {
     await pool.end();
   }
