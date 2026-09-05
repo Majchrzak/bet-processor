@@ -13,6 +13,7 @@
     "docker:down": "docker compose down",
     "docker:up": "docker compose up --build --wait",
     "lint": "pnpm -r lint",
+    "seed": "pnpm --filter @bet-processor/api build && pnpm --filter @bet-processor/tools build && node packages/tools/dist/main.js seed",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   },
