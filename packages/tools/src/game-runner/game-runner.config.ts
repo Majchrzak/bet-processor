@@ -13,8 +13,6 @@ const RunConfigSchema = z
     concurrency: z.coerce.number().int().min(1).max(1_000).default(10),
     currency: z.string().trim().min(1).max(16).default("USD"),
     hmacSecret: z.string().min(1).default("development-hmac-secret"),
-    maxBets: z.coerce.number().int().min(1).max(100).default(3),
-    maxWins: z.coerce.number().int().min(1).max(100).default(3),
     namespace: z.string().min(1).optional(),
     rounds: z.coerce.number().int().positive().default(10_000),
     users: z.coerce.number().int().positive().default(1_000),
@@ -29,8 +27,6 @@ export function parseRunConfig(
     concurrency?: string;
     currency?: string;
     hmacSecret?: string;
-    maxBets?: string;
-    maxWins?: string;
     namespace?: string;
     rounds?: string;
     users?: string;
@@ -41,8 +37,6 @@ export function parseRunConfig(
     concurrency: options.concurrency,
     currency: options.currency,
     hmacSecret: options.hmacSecret,
-    maxBets: options.maxBets,
-    maxWins: options.maxWins,
     namespace: options.namespace,
     rounds: options.rounds,
     users: options.users,
