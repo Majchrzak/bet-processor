@@ -10,9 +10,7 @@ const WIN_MULTIPLIER = 19;
 
 export function generateRound(config: RunConfig, roundIndex: number) {
   const totalWin =
-    (roundIndex + 1) % RTP_CYCLE_ROUNDS === 0
-      ? BET_AMOUNT * WIN_MULTIPLIER
-      : 0;
+    (roundIndex + 1) % RTP_CYCLE_ROUNDS === 0 ? BET_AMOUNT * WIN_MULTIPLIER : 0;
   const actions: ProcessAction[] = [
     { action: "bet", action_id: randomUUID(), amount: BET_AMOUNT },
   ];
@@ -26,9 +24,6 @@ export function generateRound(config: RunConfig, roundIndex: number) {
     gameId: randomUUID(),
     totalBet: BET_AMOUNT,
     totalWin,
-    userId: createSeedUserId(
-      (roundIndex % config.users) + 1,
-      config.namespace,
-    ),
+    userId: createSeedUserId((roundIndex % config.users) + 1, config.namespace),
   };
 }
