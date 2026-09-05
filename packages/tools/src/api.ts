@@ -46,52 +46,57 @@ interface ApiConfig {
   hmacSecret: string;
 }
 
-interface RtpParams {
-  cursor?: string | undefined;
+interface CasinoRtpParams {
   from: Date;
-  limit?: number;
   to: Date;
+}
+
+interface UserRtpParams extends CasinoRtpParams {
+  cursor?: string | undefined;
+  limit?: number;
 }
 
 export function getRtp(
   config: ApiConfig,
   report: "casino",
-  params: RtpParams,
+  params: CasinoRtpParams,
 ): Promise<z.infer<typeof CasinoRtpSchema>>;
 export function getRtp(
   config: ApiConfig,
   report: "user",
-  params: RtpParams,
+  params: UserRtpParams,
 ): Promise<z.infer<typeof UserRtpSchema>>;
 export async function getRtp(
   config: ApiConfig,
   report: "user" | "casino",
-  params: RtpParams,
-): Promise<
-  z.infer<typeof CasinoRtpSchema> | z.infer<typeof UserRtpSchema>
-> {
+  params: CasinoRtpParams | UserRtpParams,
+): Promise<z.infer<typeof CasinoRtpSchema> | z.infer<typeof UserRtpSchema>> {
   const path = report === "user" ? "users" : "casino";
   const url = new URL(`/reports/rtp/${path}`, config.apiUrl);
 
   url.searchParams.set("from", params.from.toISOString());
   url.searchParams.set("to", params.to.toISOString());
 
-  if (params.cursor) {
+  if ("cursor" in params && params.cursor) {
     url.searchParams.set("cursor", params.cursor);
   }
 
-  if (params.limit) {
+  if ("limit" in params && params.limit) {
     url.searchParams.set("limit", String(params.limit));
   }
 
   const response = await fetch(url, {
     headers: { authorization: createAuthorization(config.hmacSecret, "") },
   });
+
   if (!response.ok) {
-    throw new Error(`${report} RTP request failed with ${String(response.status)}`);
+    throw new Error(
+      `${report} RTP request failed with ${String(response.status)}`,
+    );
   }
 
   const schema = report === "user" ? UserRtpSchema : CasinoRtpSchema;
+
   return schema.parse(await response.json());
 }
 
