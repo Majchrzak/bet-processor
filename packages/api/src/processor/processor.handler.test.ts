@@ -2,15 +2,18 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type { DataSource } from "typeorm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { InvalidRequestMessage } from "../error";
 import type { ProcessorRequest } from "./contract/processor.request";
 import { createProcessHandler } from "./processor.handler";
+
+const ACTION_ID = "019917b8-1d4d-7e1a-8c35-3cdcf0be8d7a";
 
 const requestBody: ProcessorRequest = {
   user_id: "player-1",
   currency: "USD",
   game: "slots",
   game_id: "round-1",
-  actions: [{ action: "bet", action_id: "action-1", amount: 10 }],
+  actions: [{ action: "bet", action_id: ACTION_ID, amount: 10 }],
   finished: true,
 };
 
@@ -25,7 +28,7 @@ describe(createProcessHandler.name, () => {
     fixtures.query.mockResolvedValue([
       {
         balance: "90",
-        transactions: [{ action_id: "action-1", tx_id: "tx-1" }],
+        transactions: [{ action_id: ACTION_ID, tx_id: "tx-1" }],
       },
     ]);
 
@@ -34,7 +37,7 @@ describe(createProcessHandler.name, () => {
     fixtures.then.sent({
       balance: 90,
       game_id: "round-1",
-      transactions: [{ action_id: "action-1", tx_id: "tx-1" }],
+      transactions: [{ action_id: ACTION_ID, tx_id: "tx-1" }],
     });
     expect(fixtures.timeProvider).toHaveBeenCalledOnce();
     expect(fixtures.parameters()?.[8]).toBe(fixtures.now);
@@ -52,7 +55,18 @@ describe(createProcessHandler.name, () => {
   it("rejects an invalid request before database or time access", async () => {
     await fixtures.when.handle({ ...requestBody, unexpected: true });
 
-    fixtures.then.sent({ message: "Invalid request" }, 400);
+    fixtures.then.sent(InvalidRequestMessage, 400);
+    expect(fixtures.query).not.toHaveBeenCalled();
+    expect(fixtures.timeProvider).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-UUID action ID before database access", async () => {
+    await fixtures.when.handle({
+      ...requestBody,
+      actions: [{ action: "bet", action_id: "action-1", amount: 10 }],
+    });
+
+    fixtures.then.sent(InvalidRequestMessage, 400);
     expect(fixtures.query).not.toHaveBeenCalled();
     expect(fixtures.timeProvider).not.toHaveBeenCalled();
   });

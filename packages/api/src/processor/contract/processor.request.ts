@@ -4,7 +4,7 @@ import { z } from "zod";
 export const MoneyActionSchema = z
   .object({
     action: z.enum(["bet", "win"]),
-    action_id: z.string(),
+    action_id: z.uuid(),
     amount: z.number().int().positive(),
   })
   .strict();
@@ -12,8 +12,8 @@ export const MoneyActionSchema = z
 export const RollbackActionSchema = z
   .object({
     action: z.literal("rollback"),
-    action_id: z.string(),
-    original_action_id: z.string(),
+    action_id: z.uuid(),
+    original_action_id: z.uuid(),
   })
   .strict();
 

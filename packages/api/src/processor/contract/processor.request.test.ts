@@ -6,7 +6,7 @@ import {
   type ProcessorRequest,
 } from "./processor.request";
 
-const ACTION_ID = "action-1";
+const ACTION_ID = "019917b8-1d4d-7e1a-8c35-3cdcf0be8d7a";
 
 describe("ProcessorRequestSchema", () => {
   it("accepts strict actions and infers the request type", () => {
@@ -24,6 +24,7 @@ describe("ProcessorRequestSchema", () => {
 
   it.each([
     { action: "bet", action_id: 1, amount: 100 },
+    { action: "bet", action_id: "action-1", amount: 100 },
     { action: "win", action_id: ACTION_ID, amount: 0 },
     {
       action: "win",
@@ -31,6 +32,11 @@ describe("ProcessorRequestSchema", () => {
       amount: Number.MAX_SAFE_INTEGER + 1,
     },
     { action: "rollback", action_id: ACTION_ID, original_action_id: 1 },
+    {
+      action: "rollback",
+      action_id: ACTION_ID,
+      original_action_id: "action-1",
+    },
     { action: "bet", action_id: ACTION_ID, amount: 100, surprise: true },
   ])("rejects an invalid action: $action", (action) => {
     expect(() =>
