@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const SeedConfigSchema = z
   .object({
+    currency: z.string().trim().min(1).max(16).default("USD"),
     databaseUrl: z
       .url()
       .refine(
@@ -21,12 +22,14 @@ export type SeedConfig = z.infer<typeof SeedConfigSchema>;
 export function parseSeedConfig(
   options: Readonly<{
     balance?: string;
+    currency?: string;
     databaseUrl?: string;
     namespace?: string;
     users?: string;
   }>,
 ) {
   return SeedConfigSchema.parse({
+    currency: options.currency,
     databaseUrl: options.databaseUrl,
     playerBalance: options.balance,
     playerCount: options.users,
