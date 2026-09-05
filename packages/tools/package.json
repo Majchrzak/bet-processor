@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "bet-processor-tools": "./dist/main.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -14,10 +17,17 @@
   "files": [
     "dist"
   ],
+  "dependencies": {
+    "commander": "^14.0.3",
+    "pg": "^8.23.0",
+    "zod": "^4.5.4"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json --resolve-full-paths --resolve-full-extension .js",
     "lint": "eslint .",
-    "test": "vitest run --config ../../vitest.config.ts --root .",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1"
   }
 }
