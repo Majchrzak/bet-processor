@@ -13,7 +13,7 @@ describe(parseConfig.name, () => {
     expect(parsedConfig).toEqual({
       BET_PROCESSOR_DATABASE_URL:
         "postgresql://postgres:postgres@localhost:5432/bet_processor",
-      BET_PROCESSOR_DB_POOL_SIZE: 10,
+      BET_PROCESSOR_DB_POOL_SIZE: 90,
       BET_PROCESSOR_DB_STATEMENT_TIMEOUT_MS: 30_000,
       BET_PROCESSOR_HMAC_SECRET: "development-secret",
       BET_PROCESSOR_HOST: "0.0.0.0",

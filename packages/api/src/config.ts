@@ -25,7 +25,7 @@ const ConfigSchema = z
       .int()
       .min(1)
       .max(1_000)
-      .default(10),
+      .default(90),
     BET_PROCESSOR_DB_STATEMENT_TIMEOUT_MS: z.coerce
       .number()
       .int()
