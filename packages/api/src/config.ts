@@ -19,7 +19,9 @@ const ConfigSchema = z
           value.startsWith("postgres://") || value.startsWith("postgresql://"),
         "BET_PROCESSOR_DATABASE_URL must use the postgres or postgresql protocol",
       )
-      .default("postgresql://postgres:postgres@localhost:5432/bet_processor"),
+      .default(
+        "postgresql://postgres:development-db-password@localhost:5432/bet_processor",
+      ),
     BET_PROCESSOR_DB_POOL_SIZE: z.coerce
       .number()
       .int()
@@ -32,7 +34,10 @@ const ConfigSchema = z
       .min(1)
       .max(3_600_000)
       .default(30_000),
-    BET_PROCESSOR_HMAC_SECRET: z.string().min(1),
+    BET_PROCESSOR_HMAC_SECRET: z
+      .string()
+      .min(1)
+      .default("development-hmac-secret"),
     BET_PROCESSOR_HOST: z.string().min(1).default("0.0.0.0"),
     BET_PROCESSOR_LOG_LEVEL: LogLevelSchema.default("warn"),
     BET_PROCESSOR_MAX_ACTIONS_PER_REQUEST: z.coerce

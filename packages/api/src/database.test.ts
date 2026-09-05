@@ -10,7 +10,7 @@ describe(createDataSource.name, () => {
     vi.stubEnv("BET_PROCESSOR_HMAC_SECRET", "test-secret");
     vi.stubEnv(
       "BET_PROCESSOR_DATABASE_URL",
-      "postgresql://postgres:postgres@localhost:5432/bet_processor",
+      "postgresql://postgres:development-db-password@localhost:5432/bet_processor",
     );
     vi.stubEnv("BET_PROCESSOR_DB_POOL_SIZE", "25");
     vi.stubEnv("BET_PROCESSOR_DB_STATEMENT_TIMEOUT_MS", "2500");

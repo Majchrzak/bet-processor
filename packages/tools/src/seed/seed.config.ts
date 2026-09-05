@@ -10,7 +10,9 @@ const SeedConfigSchema = z
           value.startsWith("postgres://") || value.startsWith("postgresql://"),
         "database URL must use the postgres or postgresql protocol",
       )
-      .default("postgresql://postgres:postgres@localhost:5432/bet_processor"),
+      .default(
+        "postgresql://postgres:development-db-password@localhost:5432/bet_processor",
+      ),
     playerBalance: z.coerce.number().int().positive().default(100_000_000),
     playerCount: z.coerce.number().int().positive().default(1_000),
     namespace: z.string().min(1).optional(),

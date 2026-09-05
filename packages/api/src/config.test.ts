@@ -4,20 +4,18 @@ import { z } from "zod";
 import { config, parseConfig, type Config } from "./config";
 
 describe(parseConfig.name, () => {
-  it("provides bounded local defaults while requiring an HMAC secret", () => {
-    const parsedConfig = parseConfig({
-      BET_PROCESSOR_HMAC_SECRET: "development-secret",
-    });
+  it("provides bounded local defaults", () => {
+    const parsedConfig = parseConfig({});
 
     expectTypeOf(parsedConfig).toEqualTypeOf<Config>();
     expect(parsedConfig).toEqual({
       BET_PROCESSOR_DATABASE_URL:
-        "postgresql://postgres:postgres@localhost:5432/bet_processor",
+        "postgresql://postgres:development-db-password@localhost:5432/bet_processor",
       BET_PROCESSOR_DB_POOL_SIZE: 90,
       BET_PROCESSOR_DB_STATEMENT_TIMEOUT_MS: 30_000,
-      BET_PROCESSOR_HMAC_SECRET: "development-secret",
+      BET_PROCESSOR_HMAC_SECRET: "development-hmac-secret",
       BET_PROCESSOR_HOST: "0.0.0.0",
-      BET_PROCESSOR_LOG_LEVEL: "info",
+      BET_PROCESSOR_LOG_LEVEL: "warn",
       BET_PROCESSOR_MAX_ACTIONS_PER_REQUEST: 1_000,
       BET_PROCESSOR_PORT: 3_000,
       BET_PROCESSOR_REQUEST_BODY_LIMIT_BYTES: 1024 * 1024,
@@ -51,7 +49,6 @@ describe(parseConfig.name, () => {
   });
 
   it.each<[NodeJS.ProcessEnv, string]>([
-    [{}, "missing HMAC secret"],
     [{ BET_PROCESSOR_HMAC_SECRET: "" }, "empty HMAC secret"],
     [
       {
