@@ -2,9 +2,6 @@ import { getRtp, type UserRtpRow } from "../api";
 import { userIdPrefix } from "../identifiers";
 import type { RunConfig } from "./game-runner.config";
 
-const RTP_MIN = 0.94;
-const RTP_MAX = 0.96;
-
 export async function verifyCasinoRtp(config: RunConfig, from: Date, to: Date) {
   const report = await getRtp(config, "casino", { from, to });
   const casino = report.data.find((row) => row.currency === config.currency);
@@ -13,7 +10,7 @@ export async function verifyCasinoRtp(config: RunConfig, from: Date, to: Date) {
     throw new Error(`Casino RTP report has no ${config.currency} data`);
   }
 
-  return { ...casino, acceptedRange: { max: RTP_MAX, min: RTP_MIN } };
+  return casino;
 }
 
 export async function verifyUserRtp(config: RunConfig, from: Date, to: Date) {
