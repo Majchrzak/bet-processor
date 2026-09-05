@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { createSeedUserId } from "../identifiers";
-import type { ProcessAction } from "../process.client";
+import type { ProcessAction } from "../api";
 import type { RunConfig } from "./game-runner.config";
 
 const BET_AMOUNT = 100;
