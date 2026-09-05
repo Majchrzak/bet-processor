@@ -1,5 +1,31 @@
 import { createHmac } from "node:crypto";
 
+import { z } from "zod";
+
+const RtpRowSchema = z
+  .object({
+    currency: z.string(),
+    rolled_back_bet: z.number().int().nonnegative(),
+    rolled_back_win: z.number().int().nonnegative(),
+    rounds: z.number().int().nonnegative(),
+    rtp: z.number().nullable(),
+    total_bet: z.number().int(),
+    total_win: z.number().int(),
+  })
+  .strict();
+
+const CasinoRtpSchema = z.object({ data: z.array(RtpRowSchema) }).strict();
+const UserRtpRowSchema = RtpRowSchema.extend({ user_id: z.string() }).strict();
+const UserRtpSchema = z
+  .object({
+    data: z.array(UserRtpRowSchema),
+    next_cursor: z.string().nullable(),
+  })
+  .strict();
+
+export type RtpRow = z.infer<typeof RtpRowSchema>;
+export type UserRtpRow = z.infer<typeof UserRtpRowSchema>;
+
 export interface ProcessAction {
   action: "bet" | "win";
   action_id: string;
@@ -27,11 +53,23 @@ interface RtpParams {
   to: Date;
 }
 
+export function getRtp(
+  config: ApiConfig,
+  report: "casino",
+  params: RtpParams,
+): Promise<z.infer<typeof CasinoRtpSchema>>;
+export function getRtp(
+  config: ApiConfig,
+  report: "user",
+  params: RtpParams,
+): Promise<z.infer<typeof UserRtpSchema>>;
 export async function getRtp(
   config: ApiConfig,
   report: "user" | "casino",
   params: RtpParams,
-): Promise<Response> {
+): Promise<
+  z.infer<typeof CasinoRtpSchema> | z.infer<typeof UserRtpSchema>
+> {
   const path = report === "user" ? "users" : "casino";
   const url = new URL(`/reports/rtp/${path}`, config.apiUrl);
 
@@ -46,9 +84,15 @@ export async function getRtp(
     url.searchParams.set("limit", String(params.limit));
   }
 
-  return fetch(url, {
+  const response = await fetch(url, {
     headers: { authorization: createAuthorization(config.hmacSecret, "") },
   });
+  if (!response.ok) {
+    throw new Error(`${report} RTP request failed with ${String(response.status)}`);
+  }
+
+  const schema = report === "user" ? UserRtpSchema : CasinoRtpSchema;
+  return schema.parse(await response.json());
 }
 
 export async function sendProcessRequest(
