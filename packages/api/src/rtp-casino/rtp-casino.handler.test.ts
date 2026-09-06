@@ -63,7 +63,11 @@ describe(createCasinoRtpHandler.name, () => {
 
   it("rejects an invalid window before database access", async () => {
     const query = fixtures.given.query();
-    const response = await fixtures.when.get(query);
+    const response = await fixtures.when.get({
+      ...query,
+      from: query.to,
+      to: query.from,
+    });
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual(InvalidTimeOrderMessage);

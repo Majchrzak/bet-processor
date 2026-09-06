@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   decodeUserRtpCursor,
   encodeUserRtpCursor,
+  InvalidCursorString,
   UserRtpCursorSchema,
 } from "./rtp-users.cursor";
 
@@ -50,9 +51,7 @@ describe("UserRtpCursorSchema", () => {
       "utf8",
     ).toString("base64url");
 
-    expect(() => decodeUserRtpCursor(previousCursor)).toThrow(
-      "cursor is invalid",
-    );
+    expect(decodeUserRtpCursor(previousCursor)).toBe(InvalidCursorString);
     expect(() =>
       UserRtpCursorSchema.parse({
         user_id: "player",
@@ -66,7 +65,7 @@ describe("UserRtpCursorSchema", () => {
   it.each(["broken", "e30", "eyJ1c2VyX2lkIjoicGxheWVyIn0"])(
     "rejects an invalid cursor: %s",
     (cursor) => {
-      expect(() => decodeUserRtpCursor(cursor)).toThrow("cursor is invalid");
+      expect(decodeUserRtpCursor(cursor)).toBe(InvalidCursorString);
     },
   );
 });
