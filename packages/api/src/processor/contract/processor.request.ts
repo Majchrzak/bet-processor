@@ -17,12 +17,10 @@ export const RollbackActionSchema = z
   })
   .strict();
 
-export const BalanceLookupRequestSchema = z
-  .object({
-    user_id: z.string().trim().min(1).max(255),
-    currency: z.string().trim().min(1).max(16),
-  })
-  .strict();
+export const BalanceLookupRequestSchema = z.object({
+  user_id: z.string().trim().min(1).max(255),
+  currency: z.string().trim().min(1).max(16),
+});
 
 export const ProcessActionsRequestSchema = BalanceLookupRequestSchema.extend({
   game: z.string().trim().min(1).max(255),

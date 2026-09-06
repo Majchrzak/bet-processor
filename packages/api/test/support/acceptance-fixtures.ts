@@ -101,15 +101,15 @@ export async function getAcceptanceFixtures() {
 
       signedRequest(body: {
         user: { userId: string; currency: string };
-        game?: { name: string; gameId: string };
+        game: { name: string; gameId?: string };
         actions?: unknown[];
         finished?: boolean;
       }): RequestInit {
         const serializedBody = JSON.stringify({
           user_id: body.user.userId,
           currency: body.user.currency,
-          game: body.game?.name,
-          game_id: body.game?.gameId,
+          game: body.game.name,
+          game_id: body.game.gameId,
           actions: body.actions,
           finished: body.finished,
         });

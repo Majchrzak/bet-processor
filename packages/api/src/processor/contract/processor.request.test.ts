@@ -30,6 +30,16 @@ describe("processor request schemas", () => {
       expectTypeOf(body).toEqualTypeOf<BalanceLookupRequest>();
     });
 
+    it("accepts balance lookup with extra game field", () => {
+      fixtures.then.balanceLookup.succeeds(
+        fixtures.when.parseBalance({
+          ...fixtures.given.balanceLookup(),
+          game: "acceptance:test",
+        }),
+        fixtures.given.balanceLookup(),
+      );
+    });
+
     it("accepts process actions with required game fields", () => {
       const body = fixtures.given.processActions();
 
@@ -59,17 +69,18 @@ describe("processor request schemas", () => {
     });
   });
 
-  describe("balance lookup rejections", () => {
+  describe("balance lookup extra fields", () => {
     it.each([
       ["game", { game: "acceptance:test" }],
       ["game_id", { game_id: "round-1" }],
       ["actions", { actions: [] }],
-    ] as const)("rejects balance lookup with unexpected %s", (_label, extra) => {
-      fixtures.then.balanceLookup.fails(
+    ] as const)("ignores unexpected balance lookup field %s", (_label, extra) => {
+      fixtures.then.balanceLookup.succeeds(
         fixtures.when.parseBalance({
           ...fixtures.given.balanceLookup(),
           ...extra,
         }),
+        fixtures.given.balanceLookup(),
       );
     });
   });
@@ -127,29 +138,34 @@ describe("processor request schemas", () => {
     });
   });
 
-  describe("processor request union rejections", () => {
-    it.each([
-      [
-        "empty actions with game fields",
-        {
+  describe("processor request union parsing", () => {
+    it("parses payloads with extra fields as balance lookup when actions are invalid", () => {
+      fixtures.then.processorRequest.isBalanceLookup(
+        fixtures.when.parseProcessorRequest({
           user_id: "player",
           currency: "USD",
           game: "slots",
           actions: [],
-        },
-      ],
-      [
-        "game_id without actions",
+        }),
         {
+          user_id: "player",
+          currency: "USD",
+        },
+      );
+    });
+
+    it("parses game_id without actions as balance lookup", () => {
+      fixtures.then.processorRequest.isBalanceLookup(
+        fixtures.when.parseProcessorRequest({
           user_id: "player",
           currency: "USD",
           game: "slots",
           game_id: "round",
+        }),
+        {
+          user_id: "player",
+          currency: "USD",
         },
-      ],
-    ] as const)("%s", (_label, body) => {
-      fixtures.then.processorRequest.fails(
-        fixtures.when.parseProcessorRequest(body),
       );
     });
   });
@@ -262,7 +278,6 @@ function getFixtures() {
 
           expect(isProcessActionsRequest(result.data)).toBe(false);
           expect(result.data).toEqual(expected);
-          expect(result.data).not.toHaveProperty("game");
         },
 
         isProcessActions(

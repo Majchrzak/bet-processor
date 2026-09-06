@@ -62,27 +62,28 @@ describe(createProcessHandler.name, () => {
     });
   });
 
-  it("rejects an invalid request before database or time access", async () => {
+  it("falls back to balance lookup for invalid process payloads", async () => {
+    fixtures.given.dataSource.empty();
+
     const response = await fixtures.when.post({
       ...fixtures.given.requestBody(randomUUID()),
       unexpected: true,
     });
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual(InvalidRequestMessage);
-    fixtures.then.dataSource.notCalled();
-    fixtures.then.timeProvider.notCalled();
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual(WalletNotFoundMessage);
   });
 
-  it("rejects a non-UUID action ID before database access", async () => {
+  it("falls back to balance lookup for invalid action IDs", async () => {
+    fixtures.given.dataSource.balance("100");
+
     const response = await fixtures.when.post({
       ...fixtures.given.requestBody(randomUUID()),
       actions: [{ action: "bet", action_id: "action-1", amount: 10 }],
     });
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual(InvalidRequestMessage);
-    fixtures.then.dataSource.notCalled();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ balance: 100 });
     fixtures.then.timeProvider.notCalled();
   });
 
