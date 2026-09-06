@@ -29,7 +29,6 @@ describe("bet processor HTTP integration", () => {
     const response = await fixtures.when.process(
       fixtures.given.signedRequest({
         user: await fixtures.given.user(74322001, "USD"),
-        game: fixtures.given.game("acceptance:test"),
       }),
     );
 
