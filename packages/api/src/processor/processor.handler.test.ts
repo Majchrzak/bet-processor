@@ -2,13 +2,21 @@ import { Hono } from "hono";
 import type { DataSource } from "typeorm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.hoisted(() => {
+  vi.stubEnv("BET_PROCESSOR_MAX_ACTIONS_PER_REQUEST", "2");
+});
+
 import {
   GameAlreadyFinishedMessage,
   InsufficientFundsMessage,
   InvalidRequestMessage,
+  TooManyActionsMessage,
   WalletNotFoundMessage,
 } from "../error";
-import type { ProcessActionsRequest } from "./contract/processor.request";
+import type {
+  BalanceLookupRequest,
+  ProcessActionsRequest,
+} from "./contract/processor.request";
 import { createProcessHandler } from "./processor.handler";
 import { randomUUID } from "crypto";
 
@@ -44,10 +52,9 @@ describe(createProcessHandler.name, () => {
     it("gets the balance without reading the time", async () => {
       fixtures.given.dataSource.balance("100");
 
-      const response = await fixtures.when.post({
-        user_id: "player-1",
-        currency: "USD",
-      });
+      const response = await fixtures.when.post(
+        fixtures.given.balanceLookupBody(),
+      );
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ balance: 100 });
@@ -79,13 +86,28 @@ describe(createProcessHandler.name, () => {
     fixtures.then.timeProvider.notCalled();
   });
 
+  it("rejects requests that exceed the configured action limit", async () => {
+    const response = await fixtures.when.post({
+      ...fixtures.given.requestBody(randomUUID()),
+      actions: [
+        { action: "bet", action_id: randomUUID(), amount: 10 },
+        { action: "bet", action_id: randomUUID(), amount: 20 },
+        { action: "bet", action_id: randomUUID(), amount: 30 },
+      ],
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual(TooManyActionsMessage);
+    fixtures.then.dataSource.notCalled();
+    fixtures.then.timeProvider.notCalled();
+  });
+
   it("returns 404 when the wallet does not exist", async () => {
     fixtures.given.dataSource.empty();
 
-    const response = await fixtures.when.post({
-      user_id: "player-1",
-      currency: "USD",
-    });
+    const response = await fixtures.when.post(
+      fixtures.given.balanceLookupBody(),
+    );
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual(WalletNotFoundMessage);
@@ -138,6 +160,12 @@ function getFixtures() {
 
   return {
     given: {
+      balanceLookupBody(): BalanceLookupRequest {
+        return {
+          user_id: "player-1",
+          currency: "USD",
+        };
+      },
       requestBody(actionId: string): ProcessActionsRequest {
         return {
           user_id: "player-1",

@@ -2,10 +2,11 @@ import "zod/compile";
 import type { Context } from "hono";
 import type { DataSource } from "typeorm";
 
+import { config } from "../config";
 import { type TimeProvider } from "../time";
 import {
-  ProcessorRequestSchema,
   isProcessActionsRequest,
+  ProcessorRequestSchema,
 } from "./contract/processor.request";
 import {
   createProcessorRepository,
@@ -17,6 +18,7 @@ import {
   GameAlreadyFinishedMessage,
   InsufficientFundsMessage,
   InvalidRequestMessage,
+  TooManyActionsMessage,
   WalletNotFoundMessage,
 } from "../error";
 
@@ -25,6 +27,7 @@ export function createProcessHandler(
   timeProvider: TimeProvider,
 ) {
   const repository = createProcessorRepository(dataSource, timeProvider);
+  const { BET_PROCESSOR_MAX_ACTIONS_PER_REQUEST } = config();
 
   return async (context: Context<{ Variables: { requestBody: unknown } }>) => {
     const payload = ProcessorRequestSchema.safeParse(
@@ -35,10 +38,19 @@ export function createProcessHandler(
       return context.json(InvalidRequestMessage, 400);
     }
 
+    const body = payload.data;
+
+    if (
+      isProcessActionsRequest(body) &&
+      body.actions.length > BET_PROCESSOR_MAX_ACTIONS_PER_REQUEST
+    ) {
+      return context.json(TooManyActionsMessage, 400);
+    }
+
     try {
-      const response = isProcessActionsRequest(payload.data)
-        ? await repository.process(payload.data)
-        : await repository.getBalance(payload.data);
+      const response = isProcessActionsRequest(body)
+        ? await repository.process(body)
+        : await repository.getBalance(body);
 
       if (!response) {
         return context.json(WalletNotFoundMessage, 404);
