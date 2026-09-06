@@ -27,7 +27,12 @@ export const GameAlreadyFinishedMessage = {
 
 export const InvalidRequestMessage = {
   code: 102,
-  message: `report range must not exceed days`,
+  message: "invalid request",
+};
+
+export const TooManyActionsMessage = {
+  code: 108,
+  message: "too many actions in request",
 };
 
 export const TimeRangeTooLargeMessage = {
