@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { generateMultiplier, PAYOUTS } from "./game-runner.payout";
+import {
+  generateMultiplier,
+  getRtpTolerance,
+  PAYOUTS,
+} from "./game-runner.payout";
 import { BET_AMOUNT } from "./game-runner.round";
 
 describe("PAYOUTS", () => {
@@ -40,5 +44,19 @@ describe(generateMultiplier.name, () => {
     const observedRtp = totalWin / totalBet;
 
     expect(observedRtp).toBeCloseTo(0.95, 2);
+  });
+});
+
+describe(getRtpTolerance.name, () => {
+  it("uses a three-sigma tolerance with a one-percent floor", () => {
+    expect(getRtpTolerance(10_000)).toBeGreaterThan(0.09);
+    expect(getRtpTolerance(10_000)).toBeLessThan(0.1);
+    expect(getRtpTolerance(1_000_000)).toBe(0.01);
+  });
+
+  it("requires a positive number of rounds", () => {
+    expect(() => getRtpTolerance(0)).toThrow(
+      "Rounds must be a positive integer",
+    );
   });
 });

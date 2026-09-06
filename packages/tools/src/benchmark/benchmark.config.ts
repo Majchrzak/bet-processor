@@ -16,6 +16,7 @@ const BenchmarkConfigSchema = z
     hmacSecret: z.string().min(1).default("development-hmac-secret"),
     namespace: z.string().min(1).optional(),
     playerCount: z.coerce.number().int().positive().default(1_000),
+    warmup: z.coerce.number().nonnegative().max(86_400).default(0),
   })
   .strict();
 
@@ -30,6 +31,7 @@ export function parseBenchmarkConfig(
     hmacSecret?: string;
     namespace?: string;
     users?: string;
+    warmup?: string;
   }>,
 ) {
   return BenchmarkConfigSchema.parse({
@@ -40,5 +42,6 @@ export function parseBenchmarkConfig(
     hmacSecret: options.hmacSecret,
     namespace: options.namespace,
     playerCount: options.users,
+    warmup: options.warmup,
   });
 }

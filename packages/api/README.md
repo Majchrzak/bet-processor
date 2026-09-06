@@ -1,76 +1,146 @@
 # @bet-processor/api
 
-HTTP API for bet processing and RTP reporting.
+HTTP API for atomic bet processing and time-bounded RTP reporting.
 
-Amounts and balances are integer minor units (e.g. cents). All routes except
-`/health` require HMAC auth (below).
+All monetary values are integer minor units (for example, cents). Every route
+except `/health` requires HMAC authentication.
 
-Schemas: [`src/processor/contract/`](src/processor/contract/),
-[`src/rtp-users/contract/`](src/rtp-users/contract/),
-[`src/rtp-casino/contract/`](src/rtp-casino/contract/).
+## Endpoints
 
-## `POST /aggregator/takehome/process`
+| Method | Path | Authentication | Description |
+| --- | --- | --- | --- |
+| `POST` | `/aggregator/takehome/process` | HMAC over raw request body | Read a balance or process an ordered action batch |
+| `GET` | `/reports/rtp/users` | HMAC over empty body | Paginated RTP grouped by user and currency |
+| `GET` | `/reports/rtp/casino` | HMAC over empty body | Casino-wide RTP grouped by currency |
+| `GET` | `/health` | None | Liveness check |
 
-**Balance lookup** — `{ "user_id", "currency" }` → `{ "balance" }`.
+Request and response schemas live in:
 
-**Process actions** — `{ "user_id", "currency", "game", "game_id", "actions"[, "finished"] }`
-→ `{ "game_id", "transactions": [{ "action_id", "tx_id" }], "balance" }`.
+- [`src/processor/contract/`](src/processor/contract/)
+- [`src/rtp-users/contract/`](src/rtp-users/contract/)
+- [`src/rtp-casino/contract/`](src/rtp-casino/contract/)
 
-Actions: `bet` / `win` (`amount` > 0) or `rollback` (`original_action_id`).
-Replayed `action_id` returns the original `tx_id` without changing balance.
+## Process endpoint
 
-Domain errors (JSON `{ "code", "message" }`):
+### Balance lookup
+
+```json
+{
+  "user_id": "player-1",
+  "currency": "USD"
+}
+```
+
+```json
+{
+  "balance": 100000
+}
+```
+
+### Process actions
+
+```json
+{
+  "user_id": "player-1",
+  "currency": "USD",
+  "game": "provider:game",
+  "game_id": "round-1",
+  "finished": true,
+  "actions": [
+    { "action": "bet", "action_id": "8cbef27c-aef9-4de9-8058-64d59f54a621", "amount": 100 },
+    { "action": "win", "action_id": "962ead63-b2b2-4e61-ad21-cd36e73892b0", "amount": 250 }
+  ]
+}
+```
+
+| Action | Required fields | Balance effect |
+| --- | --- | --- |
+| `bet` | `action_id`, positive `amount` | Subtracts `amount` |
+| `win` | `action_id`, positive `amount` | Adds `amount` |
+| `rollback` | `action_id`, `original_action_id` | Reverses the original action if it was applied |
+
+Actions are processed in request order and the complete batch is atomic.
+Replaying an `action_id` returns its original `tx_id` without changing the
+balance.
+
+When a rollback arrives before its original bet or win, the rollback is stored
+and the later original action becomes a no-op. After the first
+`finished: true`, new actions are rejected regardless of the flag on subsequent
+requests; known replays and pre-rolled-back originals remain valid.
+
+Action state is retained for 60 days after game completion or, for unfinished
+games, after the most recent action. The game lifecycle and financial ledger
+remain durable.
+
+### Domain errors
+
+Errors use `{ "code": number, "message": string }`.
 
 | Code | HTTP | Meaning |
 | --- | --- | --- |
-| 99 | 404 | Wallet not found |
-| 100 | 400 | Insufficient funds |
-| 101 | 400 | Game already finished |
-| 102 | 400 | Invalid request |
-| 108 | 400 | Too many actions (`BET_PROCESSOR_MAX_ACTIONS_PER_REQUEST`, default 1000) |
+| `99` | `404` | Wallet not found |
+| `100` | `400` | Insufficient funds |
+| `101` | `400` | Game already finished |
+| `102` | `400` | Invalid request |
+| `108` | `400` | Too many actions |
 
-## `GET /reports/rtp/users`
+The default maximum is 1,000 actions per request and is configurable through
+`BET_PROCESSOR_MAX_ACTIONS_PER_REQUEST`.
 
-Query: `from`, `to` (ISO-8601), optional `cursor`, optional `limit` (default 100,
-max 1000). Paginated rows: `user_id`, `currency`, `rounds`, `total_bet`,
-`total_win`, `rolled_back_bet`, `rolled_back_win`, `rtp` (`null` when effective
-bet is zero). Rollbacks are excluded from bet/win totals and reported separately.
+## RTP reports
 
-## `GET /reports/rtp/casino`
+Both reports accept a half-open ISO-8601 time window:
 
-Same time window; one row per currency (no `user_id`).
+| Query parameter | Required | Description |
+| --- | --- | --- |
+| `from` | Yes | Inclusive start time |
+| `to` | Yes | Exclusive end time |
+| `limit` | Users only | Page size, default 100 and maximum 1,000 |
+| `cursor` | Users only | Opaque cursor returned by the previous page |
 
-## `GET /health`
+RTP rows contain:
 
-Unauthenticated liveness check.
+- `rounds`
+- effective `total_bet` and `total_win`
+- `rolled_back_bet` and `rolled_back_win`
+- `rtp = total_win / total_bet`, or `null` when `total_bet` is zero
+
+The user report groups by `user_id` and `currency` and returns `next_cursor`.
+The casino report groups by currency and is not paginated.
 
 ## Authentication
 
 ```text
-Authorization: HMAC-SHA256 <lowercase-hex>
+Authorization: HMAC-SHA256 <hex-digest>
 ```
 
-Digest = `HMAC-SHA256(BET_PROCESSOR_HMAC_SECRET, raw body bytes)`. GET reports
-sign an empty body. Comparison is constant-time. Invalid/missing signature →
-403 with `{ "message": "forbidden" }`.
+The digest is:
+
+```text
+hex(HMAC_SHA256(BET_PROCESSOR_HMAC_SECRET, raw request body bytes))
+```
+
+POST requests are signed over the exact bytes sent to the API. GET requests are
+signed over an empty body. Signatures are compared in constant time.
+
+Missing, malformed, or invalid authorization returns:
+
+```text
+HTTP 403
+{"message":"forbidden"}
+```
 
 ## Configuration
-
-Validated by [`src/config.ts`](src/config.ts). Copy [`.env.example`](../../.env.example)
-for local / Docker Compose defaults. Unknown variables are ignored.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `BET_PROCESSOR_DATABASE_URL` | `postgresql://postgres:development-db-password@localhost:5432/bet_processor` | PostgreSQL connection string |
 | `BET_PROCESSOR_DB_POOL_SIZE` | `90` | Connection pool size |
-| `BET_PROCESSOR_DB_STATEMENT_TIMEOUT_MS` | `30000` | Per-query timeout (ms) |
+| `BET_PROCESSOR_DB_STATEMENT_TIMEOUT_MS` | `30000` | Per-query timeout in milliseconds |
 | `BET_PROCESSOR_HMAC_SECRET` | `development-hmac-secret` | Request signing secret |
 | `BET_PROCESSOR_HOST` | `0.0.0.0` | Bind address |
 | `BET_PROCESSOR_PORT` | `3000` | Listen port |
-| `BET_PROCESSOR_LOG_LEVEL` | `warn` | Log level (`fatal` … `silent`) |
-| `BET_PROCESSOR_MAX_ACTIONS_PER_REQUEST` | `1000` | Max actions per process request |
-| `BET_PROCESSOR_REQUEST_BODY_LIMIT_BYTES` | `1048576` | Max request body size |
-| `BET_PROCESSOR_RTP_MAX_RANGE_DAYS` | `3660` | Max RTP report window length |
-
-Docker Compose also uses `POSTGRES_*` / `API_PORT` for the database service and
-port mapping — see `docker-compose.yml`.
+| `BET_PROCESSOR_LOG_LEVEL` | `warn` | Log level (`fatal` through `silent`) |
+| `BET_PROCESSOR_MAX_ACTIONS_PER_REQUEST` | `1000` | Maximum actions per process request |
+| `BET_PROCESSOR_REQUEST_BODY_LIMIT_BYTES` | `1048576` | Maximum request body size |
+| `BET_PROCESSOR_RTP_MAX_RANGE_DAYS` | `3660` | Maximum RTP report window |

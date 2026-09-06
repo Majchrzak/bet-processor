@@ -76,21 +76,7 @@ export const processGameActionsSql = sql`
       )
       ORDER BY ordinal
     LOOP
-      -- A pre-rolled-back original is the only action accepted after finish.
-      v_pre_rolled_back := FALSE;
-      IF v_action.action_name IN ('bet', 'win') THEN
-        v_pre_rolled_back := EXISTS (
-          SELECT FROM hot_game_action
-          WHERE rollback_of_game_action_id = v_action.action_key
-        );
-      END IF;
-
-      IF v_game_finished AND NOT v_pre_rolled_back THEN
-        RAISE EXCEPTION USING ERRCODE = 'BP003',
-          MESSAGE = 'Game is already finished';
-      END IF;
-
-      -- Replays return the original deterministic transaction id.
+      -- Replays remain idempotent after the game is finished.
       IF EXISTS (
         SELECT FROM hot_game_action WHERE id = v_action.action_key
       ) THEN
@@ -102,6 +88,20 @@ export const processGameActionsSql = sql`
           )
         );
         CONTINUE;
+      END IF;
+
+      -- A pre-rolled-back original is the only new action accepted after finish.
+      v_pre_rolled_back := FALSE;
+      IF v_action.action_name IN ('bet', 'win') THEN
+        v_pre_rolled_back := EXISTS (
+          SELECT FROM hot_game_action
+          WHERE rollback_of_game_action_id = v_action.action_key
+        );
+      END IF;
+
+      IF v_game_finished AND NOT v_pre_rolled_back THEN
+        RAISE EXCEPTION USING ERRCODE = 'BP003',
+          MESSAGE = 'Game is already finished';
       END IF;
 
       v_bet_delta := 0;

@@ -1,6 +1,7 @@
 import { getRtp, type UserRtpRow } from "../api";
 import { userIdPrefix } from "../identifiers";
 import type { RunConfig } from "./game-runner.config";
+import { EXPECTED_RTP, getRtpTolerance } from "./game-runner.payout";
 
 export async function verifyCasinoRtp(config: RunConfig, from: Date, to: Date) {
   const report = await getRtp(config, "casino", { from, to });
@@ -10,16 +11,34 @@ export async function verifyCasinoRtp(config: RunConfig, from: Date, to: Date) {
     throw new Error(`Casino RTP report has no ${config.currency} data`);
   }
 
+  const tolerance = getRtpTolerance(config.rounds);
+  if (Math.abs(casino.rtp - EXPECTED_RTP) > tolerance) {
+    throw new Error(
+      `Casino RTP ${(casino.rtp * 100).toFixed(2)}% is outside the allowed ±${(tolerance * 100).toFixed(2)}%`,
+    );
+  }
+
   return casino;
 }
 
 export async function verifyUserRtp(config: RunConfig, from: Date, to: Date) {
   const users = await fetchUserRtp(config, from, to);
+  const expectedActiveUsers = Math.min(config.users, config.rounds);
+
+  if (users.length !== expectedActiveUsers) {
+    throw new Error(
+      `Expected RTP for ${String(expectedActiveUsers)} active users, got ${String(users.length)}`,
+    );
+  }
 
   const rtps = users
     .map((row) => row.rtp)
     .filter((rtp): rtp is number => rtp !== null)
     .sort((left, right) => left - right);
+
+  if (users.length >= 100 && rtps[0] === rtps.at(-1)) {
+    throw new Error("Per-user RTP distribution has no variance");
+  }
 
   return {
     active: users.length,

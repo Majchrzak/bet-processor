@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { logger } from "hono/logger";
 import { Logger } from "pino";
 
 import { config } from "./config";
@@ -24,13 +23,6 @@ export function buildApp(log: Logger, dataSource: DataSource) {
     config();
 
   const app = new Hono<{ Variables: { requestBody?: unknown } }>();
-
-  app.use(
-    "*",
-    logger((message) => {
-      log.info(message);
-    }),
-  );
 
   app.onError((error, context) => {
     log.error(error, "request failed");
@@ -75,7 +67,7 @@ export function buildApp(log: Logger, dataSource: DataSource) {
       try {
         context.set(
           "requestBody",
-          JSON.parse(new TextDecoder().decode(rawBody)) as unknown,
+          JSON.parse(Buffer.from(rawBody).toString("utf8")) as unknown,
         );
       } catch {
         return context.json(InvalidRequestMessage, 400);

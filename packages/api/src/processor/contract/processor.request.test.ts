@@ -30,16 +30,6 @@ describe("processor request schemas", () => {
       expectTypeOf(body).toEqualTypeOf<BalanceLookupRequest>();
     });
 
-    it("accepts balance lookup with extra game field", () => {
-      fixtures.then.balanceLookup.succeeds(
-        fixtures.when.parseBalance({
-          ...fixtures.given.balanceLookup(),
-          game: "acceptance:test",
-        }),
-        fixtures.given.balanceLookup(),
-      );
-    });
-
     it("accepts process actions with required game fields", () => {
       const body = fixtures.given.processActions();
 
@@ -74,13 +64,12 @@ describe("processor request schemas", () => {
       ["game", { game: "acceptance:test" }],
       ["game_id", { game_id: "round-1" }],
       ["actions", { actions: [] }],
-    ] as const)("ignores unexpected balance lookup field %s", (_label, extra) => {
-      fixtures.then.balanceLookup.succeeds(
+    ] as const)("rejects unexpected balance lookup field %s", (_label, extra) => {
+      fixtures.then.balanceLookup.fails(
         fixtures.when.parseBalance({
           ...fixtures.given.balanceLookup(),
           ...extra,
         }),
-        fixtures.given.balanceLookup(),
       );
     });
   });
@@ -139,33 +128,35 @@ describe("processor request schemas", () => {
   });
 
   describe("processor request union parsing", () => {
-    it("parses payloads with extra fields as balance lookup when actions are invalid", () => {
-      fixtures.then.processorRequest.isBalanceLookup(
+    it("rejects invalid actions instead of falling back to balance lookup", () => {
+      fixtures.then.processorRequest.fails(
         fixtures.when.parseProcessorRequest({
           user_id: "player",
           currency: "USD",
           game: "slots",
           actions: [],
         }),
-        {
-          user_id: "player",
-          currency: "USD",
-        },
       );
     });
 
-    it("parses game_id without actions as balance lookup", () => {
-      fixtures.then.processorRequest.isBalanceLookup(
+    it("rejects game_id without actions", () => {
+      fixtures.then.processorRequest.fails(
         fixtures.when.parseProcessorRequest({
           user_id: "player",
           currency: "USD",
           game: "slots",
           game_id: "round",
         }),
-        {
+      );
+    });
+
+    it("rejects game metadata without actions", () => {
+      fixtures.then.processorRequest.fails(
+        fixtures.when.parseProcessorRequest({
           user_id: "player",
           currency: "USD",
-        },
+          game: "slots",
+        }),
       );
     });
   });

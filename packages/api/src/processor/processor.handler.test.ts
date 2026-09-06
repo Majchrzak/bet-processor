@@ -62,28 +62,27 @@ describe(createProcessHandler.name, () => {
     });
   });
 
-  it("falls back to balance lookup for invalid process payloads", async () => {
-    fixtures.given.dataSource.empty();
-
+  it("rejects invalid process payloads", async () => {
     const response = await fixtures.when.post({
       ...fixtures.given.requestBody(randomUUID()),
       unexpected: true,
     });
 
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual(WalletNotFoundMessage);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual(InvalidRequestMessage);
+    fixtures.then.dataSource.notCalled();
+    fixtures.then.timeProvider.notCalled();
   });
 
-  it("falls back to balance lookup for invalid action IDs", async () => {
-    fixtures.given.dataSource.balance("100");
-
+  it("rejects invalid action IDs", async () => {
     const response = await fixtures.when.post({
       ...fixtures.given.requestBody(randomUUID()),
       actions: [{ action: "bet", action_id: "action-1", amount: 10 }],
     });
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ balance: 100 });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual(InvalidRequestMessage);
+    fixtures.then.dataSource.notCalled();
     fixtures.then.timeProvider.notCalled();
   });
 

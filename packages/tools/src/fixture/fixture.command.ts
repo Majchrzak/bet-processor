@@ -56,30 +56,16 @@ export async function runFixture(config: FixtureConfig): Promise<void> {
     }
 
     if (config.gameCount > 0) {
-      if (config.clean) {
-        await client.query("SET timescaledb.skip_cagg_invalidation = ON");
-      }
-
       const endAt = new Date(Date.now() - 60 * 60 * 1_000);
       const startAt = new Date(endAt.getTime() - config.days * 86_400 * 1_000);
+
+      await client.query("SET synchronous_commit = OFF");
 
       try {
         await insertFixture(client, config, startAt, endAt);
       } finally {
-        if (config.clean) {
-          await client.query("SET timescaledb.skip_cagg_invalidation = OFF");
-        }
+        await client.query("RESET synchronous_commit");
       }
-
-      console.error("Refreshing reporting aggregates...");
-      await refreshAggregates(
-        client,
-        config.clean ? startAt : undefined,
-        config.clean ? endAt : undefined,
-      );
-
-      console.error("Converting eligible chunks to columnstore...");
-      await convertHistoricalChunks(client);
     }
   } finally {
     try {
@@ -92,18 +78,13 @@ export async function runFixture(config: FixtureConfig): Promise<void> {
 }
 
 async function cleanApplicationData(client: PoolClient): Promise<void> {
-  await client.query("BEGIN");
-  try {
-    await client.query(
-      "TRUNCATE TABLE transactions, hot_game_action, game_round, wallet",
-    );
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  }
+  console.error("Truncating ledger...");
+  await client.query("TRUNCATE TABLE transactions");
 
-  await refreshAggregates(client);
+  console.error("Truncating hot path tables...");
+  await client.query("TRUNCATE TABLE hot_game_action, game_round, wallet");
+
+  console.error("Clean complete.");
 }
 
 async function insertFixture(
@@ -115,6 +96,8 @@ async function insertFixture(
   const runId = randomUUID();
   const hotCutoff = new Date(endAt.getTime() - HOT_DATA_DAYS * 86_400 * 1_000);
   const prefix = userIdPrefix(config.namespace);
+  const startedAt = performance.now();
+  let lastLoggedAt = startedAt;
 
   for (let game = 1; game <= config.gameCount; ) {
     const lastGame = Math.min(game + config.batchGames - 1, config.gameCount);
@@ -204,83 +187,17 @@ WHERE created_at >= $9::timestamptz
       ],
     );
 
+    const now = performance.now();
+    if (lastGame === config.gameCount || now - lastLoggedAt >= 5_000) {
+      const elapsedSeconds = (now - startedAt) / 1_000;
+      const gamesPerSecond =
+        elapsedSeconds === 0 ? 0 : Math.round(lastGame / elapsedSeconds);
+      console.error(
+        `Inserted ${lastGame.toLocaleString("en-US")}/${config.gameCount.toLocaleString("en-US")} games (~${gamesPerSecond.toLocaleString("en-US")} games/s)...`,
+      );
+      lastLoggedAt = now;
+    }
+
     game = lastGame + 1;
   }
-}
-
-async function refreshAggregates(
-  client: PoolClient,
-  startAt?: Date,
-  endAt?: Date,
-): Promise<void> {
-  if (startAt === undefined || endAt === undefined) {
-    for (const aggregate of [
-      "agg_user_rtp_hourly",
-      "agg_casino_rtp_hourly",
-      "agg_user_rtp_daily",
-      "agg_casino_rtp_daily",
-    ]) {
-      await client.query(
-        `CALL refresh_continuous_aggregate('${aggregate}', NULL, NULL)`,
-      );
-    }
-    return;
-  }
-
-  const hourStart = floorUtc(startAt, 60 * 60 * 1_000);
-  const hourEnd = ceilUtc(endAt, 60 * 60 * 1_000);
-  const dayStart = floorUtc(startAt, 24 * 60 * 60 * 1_000);
-  const dayEnd = ceilUtc(endAt, 24 * 60 * 60 * 1_000);
-
-  for (const aggregate of ["agg_user_rtp_hourly", "agg_casino_rtp_hourly"]) {
-    await client.query(
-      `CALL refresh_continuous_aggregate(
-        '${aggregate}', $1::timestamptz, $2::timestamptz
-      )`,
-      [hourStart, hourEnd],
-    );
-  }
-
-  for (const aggregate of ["agg_user_rtp_daily", "agg_casino_rtp_daily"]) {
-    await client.query(
-      `CALL refresh_continuous_aggregate(
-        '${aggregate}', $1::timestamptz, $2::timestamptz
-      )`,
-      [dayStart, dayEnd],
-    );
-  }
-}
-
-function floorUtc(value: Date, intervalMs: number): Date {
-  return new Date(Math.floor(value.getTime() / intervalMs) * intervalMs);
-}
-
-function ceilUtc(value: Date, intervalMs: number): Date {
-  return new Date(Math.ceil(value.getTime() / intervalMs) * intervalMs);
-}
-
-async function convertHistoricalChunks(client: PoolClient): Promise<void> {
-  await client.query(`
-    DO $block$
-    DECLARE
-      relation REGCLASS;
-      chunk REGCLASS;
-    BEGIN
-      FOREACH relation IN ARRAY ARRAY[
-        'transactions'::REGCLASS,
-        'agg_user_rtp_hourly'::REGCLASS,
-        'agg_casino_rtp_hourly'::REGCLASS,
-        'agg_user_rtp_daily'::REGCLASS,
-        'agg_casino_rtp_daily'::REGCLASS
-      ]
-      LOOP
-        FOR chunk IN
-          SELECT show_chunks(relation, older_than => NOW() - INTERVAL '45 days')
-        LOOP
-          CALL convert_to_columnstore(chunk, if_not_columnstore => TRUE);
-        END LOOP;
-      END LOOP;
-    END
-    $block$
-  `);
 }
