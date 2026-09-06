@@ -1,5 +1,5 @@
 import "zod/compile";
-import type { FastifyReply, FastifyRequest } from "fastify";
+import type { Context } from "hono";
 import type { DataSource } from "typeorm";
 
 import { config } from "../config";
@@ -31,11 +31,11 @@ export function createUserRtpHandler(dataSource: DataSource) {
   const repository = createUserRtpRepository(dataSource);
   const { BET_PROCESSOR_RTP_MAX_RANGE_DAYS } = config();
 
-  return async (request: FastifyRequest, reply: FastifyReply) => {
-    const query = UserRtpReportQuerySchema.safeParse(request.query);
+  return async (context: Context) => {
+    const query = UserRtpReportQuerySchema.safeParse(context.req.query());
 
     if (!query.success) {
-      return reply.code(400).send(InvalidRequestMessage);
+      return context.json(InvalidRequestMessage, 400);
     }
 
     const window = parseTimeWindow(
@@ -46,11 +46,11 @@ export function createUserRtpHandler(dataSource: DataSource) {
 
     switch (window) {
       case InvalidTimeOrder:
-        return reply.code(400).send(InvalidTimeOrderMessage);
+        return context.json(InvalidTimeOrderMessage, 400);
       case TimeRangeTooLarge:
-        return reply.code(400).send(TimeRangeTooLargeMessage);
+        return context.json(TimeRangeTooLargeMessage, 400);
       case InvalidTimeParameter:
-        return reply.code(400).send(InvalidTimeParameter);
+        return context.json(InvalidTimeParameter, 400);
     }
 
     const cursor = query.data.cursor
@@ -59,7 +59,7 @@ export function createUserRtpHandler(dataSource: DataSource) {
 
     switch (cursor) {
       case InvalidCursorString:
-        return reply.code(400).send(CursorMalformedMessage);
+        return context.json(CursorMalformedMessage, 400);
     }
 
     if (
@@ -67,7 +67,7 @@ export function createUserRtpHandler(dataSource: DataSource) {
       (cursor.from !== window.from.toISOString() ||
         cursor.to !== window.to.toISOString())
     ) {
-      return reply.code(400).send(CursorTimeWindowMismatchMessage);
+      return context.json(CursorTimeWindowMismatchMessage, 400);
     }
 
     const result = await repository.report({
@@ -76,7 +76,7 @@ export function createUserRtpHandler(dataSource: DataSource) {
       window,
     });
 
-    return await reply.send(
+    return context.json(
       UserRtpReportResponseSchema.parse({
         ...result,
         data: result.data.map(toUserRtpReportRow),

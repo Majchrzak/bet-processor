@@ -1,3 +1,15 @@
+export const InternalServerErrorMessage = {
+  message: "internal server error message",
+};
+
+export const ForbiddenMessage = {
+  message: "forbidden",
+};
+
+export const RequestBodyTooLargeMessage = {
+  message: "request body too large",
+};
+
 export const WalletNotFoundMessage = {
   code: 99,
   message: "wallet not found",

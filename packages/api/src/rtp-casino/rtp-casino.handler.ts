@@ -1,5 +1,5 @@
 import "zod/compile";
-import type { FastifyReply, FastifyRequest } from "fastify";
+import type { Context } from "hono";
 import type { DataSource } from "typeorm";
 
 import { config } from "../config";
@@ -28,11 +28,11 @@ export function createCasinoRtpHandler(dataSource: DataSource) {
   const repository = createCasinoRtpRepository(dataSource);
   const { BET_PROCESSOR_RTP_MAX_RANGE_DAYS } = config();
 
-  return async (request: FastifyRequest, reply: FastifyReply) => {
-    const query = CasinoRtpReportQuerySchema.safeParse(request.query);
+  return async (context: Context) => {
+    const query = CasinoRtpReportQuerySchema.safeParse(context.req.query());
 
     if (!query.success) {
-      return reply.code(400).send(InvalidRequestMessage);
+      return context.json(InvalidRequestMessage, 400);
     }
 
     const window = parseTimeWindow(
@@ -43,16 +43,16 @@ export function createCasinoRtpHandler(dataSource: DataSource) {
 
     switch (window) {
       case InvalidTimeOrder:
-        return reply.code(400).send(InvalidTimeOrderMessage);
+        return context.json(InvalidTimeOrderMessage, 400);
       case TimeRangeTooLarge:
-        return reply.code(400).send(TimeRangeTooLargeMessage);
+        return context.json(TimeRangeTooLargeMessage, 400);
       case InvalidTimeParameter:
-        return reply.code(400).send(InvalidTimeParameter);
+        return context.json(InvalidTimeParameter, 400);
     }
 
     const result = await repository.report(window);
 
-    return await reply.send(
+    return context.json(
       CasinoRtpReportResponseSchema.parse({
         data: result.data.map(toCasinoRtpReportRow),
       }),

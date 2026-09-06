@@ -1,12 +1,9 @@
 import "zod/compile";
-import type { FastifyReply, FastifyRequest } from "fastify";
+import type { Context } from "hono";
 import type { DataSource } from "typeorm";
 
 import { type TimeProvider } from "../time";
-import {
-  ProcessorRequestSchema,
-  type ProcessorRequest,
-} from "./contract/processor.request";
+import { ProcessorRequestSchema } from "./contract/processor.request";
 import {
   createProcessorRepository,
   GameAlreadyFinishedDatabaseError,
@@ -26,14 +23,13 @@ export function createProcessHandler(
 ) {
   const repository = createProcessorRepository(dataSource, timeProvider);
 
-  return async (
-    request: FastifyRequest<{ Body: ProcessorRequest }>,
-    reply: FastifyReply,
-  ) => {
-    const payload = ProcessorRequestSchema.safeParse(request.body);
+  return async (context: Context<{ Variables: { requestBody: unknown } }>) => {
+    const payload = ProcessorRequestSchema.safeParse(
+      context.get("requestBody"),
+    );
 
     if (!payload.success) {
-      return reply.code(400).send(InvalidRequestMessage);
+      return context.json(InvalidRequestMessage, 400);
     }
 
     const body = payload.data;
@@ -44,18 +40,18 @@ export function createProcessHandler(
         : await repository.getBalance(body);
 
       if (!response) {
-        return await reply.code(404).send(WalletNotFoundMessage);
+        return context.json(WalletNotFoundMessage, 404);
       }
 
-      return await reply.send(response);
+      return context.json(response);
     } catch (error) {
       switch (databaseErrorCode(error)) {
         case WalletNotFoundDatabaseError:
-          return reply.code(404).send(WalletNotFoundMessage);
+          return context.json(WalletNotFoundMessage, 404);
         case InsufficientFundsDatabaseError:
-          return reply.code(400).send(InsufficientFundsMessage);
+          return context.json(InsufficientFundsMessage, 400);
         case GameAlreadyFinishedDatabaseError:
-          return reply.code(400).send(GameAlreadyFinishedMessage);
+          return context.json(GameAlreadyFinishedMessage, 400);
         default:
           throw error;
       }

@@ -1,21 +1,16 @@
-import type { FastifyReply, FastifyRequest } from "fastify";
+import { Hono } from "hono";
 import type { DataSource } from "typeorm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { InvalidRequestMessage } from "../error";
+import {
+  GameAlreadyFinishedMessage,
+  InsufficientFundsMessage,
+  InvalidRequestMessage,
+  WalletNotFoundMessage,
+} from "../error";
 import type { ProcessorRequest } from "./contract/processor.request";
 import { createProcessHandler } from "./processor.handler";
-
-const ACTION_ID = "019917b8-1d4d-7e1a-8c35-3cdcf0be8d7a";
-
-const requestBody: ProcessorRequest = {
-  user_id: "player-1",
-  currency: "USD",
-  game: "slots",
-  game_id: "round-1",
-  actions: [{ action: "bet", action_id: ACTION_ID, amount: 10 }],
-  finished: true,
-};
+import { randomUUID } from "crypto";
 
 describe(createProcessHandler.name, () => {
   let fixtures: ReturnType<typeof getFixtures>;
@@ -24,85 +19,103 @@ describe(createProcessHandler.name, () => {
     fixtures = getFixtures();
   });
 
-  it("processes actions using the provided time", async () => {
-    fixtures.query.mockResolvedValue([
-      {
+  describe("happy path", () => {
+    it("processes actions using the provided time", async () => {
+      const actionId = randomUUID();
+      const requestBody = fixtures.given.requestBody(actionId);
+
+      fixtures.given.dataSource.process({
         balance: "90",
-        transactions: [{ action_id: ACTION_ID, tx_id: "tx-1" }],
-      },
-    ]);
+        transactions: [{ action_id: actionId, tx_id: "tx-1" }],
+      });
 
-    await fixtures.when.handle(requestBody);
+      const response = await fixtures.when.post(requestBody);
 
-    fixtures.then.sent({
-      balance: 90,
-      game_id: "round-1",
-      transactions: [{ action_id: ACTION_ID, tx_id: "tx-1" }],
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        balance: 90,
+        game_id: "round-1",
+        transactions: [{ action_id: actionId, tx_id: "tx-1" }],
+      });
+      fixtures.then.timeProvider.calledOnce();
+      fixtures.then.dataSource.processedAt();
     });
-    expect(fixtures.timeProvider).toHaveBeenCalledOnce();
-    expect(fixtures.parameters()?.[8]).toBe(fixtures.now);
-  });
 
-  it("gets the balance without reading the time", async () => {
-    fixtures.query.mockResolvedValue([{ balance: "100" }]);
+    it("gets the balance without reading the time", async () => {
+      fixtures.given.dataSource.balance("100");
 
-    await fixtures.when.handle({ ...requestBody, actions: [] });
+      const response = await fixtures.when.post({
+        ...fixtures.given.requestBody(randomUUID()),
+        actions: [],
+      });
 
-    fixtures.then.sent({ balance: 100 });
-    expect(fixtures.timeProvider).not.toHaveBeenCalled();
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ balance: 100 });
+      fixtures.then.timeProvider.notCalled();
+    });
   });
 
   it("rejects an invalid request before database or time access", async () => {
-    await fixtures.when.handle({ ...requestBody, unexpected: true });
+    const response = await fixtures.when.post({
+      ...fixtures.given.requestBody(randomUUID()),
+      unexpected: true,
+    });
 
-    fixtures.then.sent(InvalidRequestMessage, 400);
-    expect(fixtures.query).not.toHaveBeenCalled();
-    expect(fixtures.timeProvider).not.toHaveBeenCalled();
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual(InvalidRequestMessage);
+    fixtures.then.dataSource.notCalled();
+    fixtures.then.timeProvider.notCalled();
   });
 
   it("rejects a non-UUID action ID before database access", async () => {
-    await fixtures.when.handle({
-      ...requestBody,
+    const response = await fixtures.when.post({
+      ...fixtures.given.requestBody(randomUUID()),
       actions: [{ action: "bet", action_id: "action-1", amount: 10 }],
     });
 
-    fixtures.then.sent(InvalidRequestMessage, 400);
-    expect(fixtures.query).not.toHaveBeenCalled();
-    expect(fixtures.timeProvider).not.toHaveBeenCalled();
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual(InvalidRequestMessage);
+    fixtures.then.dataSource.notCalled();
+    fixtures.then.timeProvider.notCalled();
   });
 
   it("returns 404 when the wallet does not exist", async () => {
-    fixtures.query.mockResolvedValue([]);
+    fixtures.given.dataSource.empty();
 
-    await fixtures.when.handle({ ...requestBody, actions: undefined });
+    const response = await fixtures.when.post({
+      ...fixtures.given.requestBody(randomUUID()),
+      actions: undefined,
+    });
 
-    fixtures.then.sent({ message: "Wallet not found" }, 404);
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual(WalletNotFoundMessage);
   });
 
   it.each([
-    ["BP001", 404, { message: "Wallet not found" }],
-    [
-      "BP002",
-      400,
-      {
-        code: 100,
-        message: "Player has not enough funds to process an action",
-      },
-    ],
-    ["BP003", 409, { message: "Game is already finished" }],
-  ] as const)("maps database error %s to HTTP %s", async (code, status, body) => {
-    fixtures.query.mockRejectedValue({ driverError: { code } });
+    ["BP001", 404, WalletNotFoundMessage],
+    ["BP002", 400, InsufficientFundsMessage],
+    ["BP003", 400, GameAlreadyFinishedMessage],
+  ] as const)(
+    "maps database error %s to HTTP %s",
+    async (code, status, body) => {
+      fixtures.given.dataSource.databaseError(code);
 
-    await fixtures.when.handle(requestBody);
+      const response = await fixtures.when.post(
+        fixtures.given.requestBody(randomUUID()),
+      );
 
-    fixtures.then.sent(body, status);
-  });
+      expect(response.status).toBe(status);
+      expect(await response.json()).toEqual(body);
+    },
+  );
 
-  it("rethrows unexpected failures for Fastify", async () => {
+  it("rethrows unexpected failures for the HTTP error handler", async () => {
     const error = new Error("connection lost");
-    fixtures.query.mockRejectedValue(error);
+    fixtures.given.dataSource.throws(error);
 
-    await expect(fixtures.when.handle(requestBody)).rejects.toBe(error);
+    await expect(
+      fixtures.when.post(fixtures.given.requestBody(randomUUID())),
+    ).rejects.toBe(error);
   });
 });
 
@@ -111,30 +124,78 @@ function getFixtures() {
   const now = new Date("2026-09-02T12:34:56.789Z");
   const timeProvider = vi.fn(() => now);
   const dataSource = { query } as unknown as DataSource;
-  const send = vi.fn((payload: unknown) => payload);
-  const code = vi.fn(() => reply);
-  const reply = { code, send } as unknown as FastifyReply;
+  const app = new Hono<{ Variables: { requestBody: unknown } }>();
   const handler = createProcessHandler(dataSource, timeProvider);
 
+  app.use(async (context, next) => {
+    context.set("requestBody", await context.req.json<unknown>());
+    return next();
+  });
+  app.post("/", handler);
+  app.onError((error) => {
+    throw error;
+  });
+
   return {
-    now,
-    query,
-    timeProvider,
-    parameters() {
-      return query.mock.calls[0]?.[1] as unknown[] | undefined;
+    given: {
+      requestBody(actionId: string): ProcessorRequest {
+        return {
+          user_id: "player-1",
+          currency: "USD",
+          game: "slots",
+          game_id: "round-1",
+          actions: [{ action: "bet", action_id: actionId, amount: 10 }],
+          finished: true,
+        };
+      },
+      dataSource: {
+        balance(balance: string) {
+          query.mockResolvedValue([{ balance }]);
+        },
+        process(result: {
+          balance: string;
+          transactions: { action_id: string; tx_id: string }[];
+        }) {
+          query.mockResolvedValue([result]);
+        },
+        empty() {
+          query.mockResolvedValue([]);
+        },
+        databaseError(code: string) {
+          query.mockRejectedValue({ driverError: { code } });
+        },
+        throws(error: Error) {
+          query.mockRejectedValue(error);
+        },
+      },
     },
     when: {
-      async handle(body: unknown) {
-        const request = { body } as FastifyRequest<{
-          Body: ProcessorRequest;
-        }>;
-        return await handler(request, reply);
+      post(body: unknown) {
+        return app.request("/", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
       },
     },
     then: {
-      sent(body: unknown, status?: number) {
-        if (status !== undefined) expect(code).toHaveBeenCalledWith(status);
-        expect(send).toHaveBeenCalledWith(body);
+      dataSource: {
+        notCalled() {
+          expect(query).not.toHaveBeenCalled();
+        },
+        processedAt() {
+          expect((query.mock.calls[0]?.[1] as unknown[] | undefined)?.[8]).toBe(
+            now,
+          );
+        },
+      },
+      timeProvider: {
+        calledOnce() {
+          expect(timeProvider).toHaveBeenCalledOnce();
+        },
+        notCalled() {
+          expect(timeProvider).not.toHaveBeenCalled();
+        },
       },
     },
   };

@@ -1,87 +1,91 @@
-import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
+import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { logger } from "hono/logger";
+import { Logger } from "pino";
 
 import { config } from "./config";
-import { createDataSource } from "./database";
 import { verifyHmacSha256Authorization } from "./hmac";
 import { createProcessHandler } from "./processor/processor.handler";
 import { createCasinoRtpHandler } from "./rtp-casino/rtp-casino.handler";
 import { createUserRtpHandler } from "./rtp-users/rtp-users.handler";
 import { systemTimeProvider } from "./time";
+import {
+  ForbiddenMessage,
+  InternalServerErrorMessage,
+  InvalidRequestMessage,
+  RequestBodyTooLargeMessage,
+} from "./error";
+import { DataSource } from "typeorm";
 
-const EMPTY_BODY = Buffer.alloc(0);
-const rawRequestBodies = new WeakMap<FastifyRequest, Buffer>();
+const EMPTY_BODY = new Uint8Array();
 
-const protectedRoutePaths = new Set([
-  "/aggregator/takehome/process",
-  "/reports/rtp/users",
-  "/reports/rtp/casino",
-]);
+export function buildApp(log: Logger, dataSource: DataSource) {
+  const { BET_PROCESSOR_HMAC_SECRET, BET_PROCESSOR_REQUEST_BODY_LIMIT_BYTES } =
+    config();
 
-function isProtectedRoute(request: FastifyRequest): boolean {
-  const routePath = request.routeOptions.url;
-  return routePath !== undefined && protectedRoutePaths.has(routePath);
-}
+  const app = new Hono<{ Variables: { requestBody?: unknown } }>();
 
-function isAuthorized(request: FastifyRequest, secret: string): boolean {
-  return verifyHmacSha256Authorization(
-    rawRequestBodies.get(request) ?? EMPTY_BODY,
-    secret,
-    request.headers.authorization,
+  app.use(
+    "*",
+    logger((message) => {
+      log.info(message);
+    }),
   );
-}
 
-export function buildApp(): FastifyInstance {
-  const {
-    BET_PROCESSOR_HMAC_SECRET,
-    BET_PROCESSOR_REQUEST_BODY_LIMIT_BYTES,
-    BET_PROCESSOR_LOG_LEVEL,
-  } = config();
+  app.onError((error, context) => {
+    log.error(error, "request failed");
 
-  const app = Fastify({
-    bodyLimit: BET_PROCESSOR_REQUEST_BODY_LIMIT_BYTES,
-    logger: { level: BET_PROCESSOR_LOG_LEVEL },
+    return context.json(InternalServerErrorMessage, 500);
   });
 
-  const dataSource = createDataSource();
+  app.use(
+    "/aggregator/takehome/process",
+    bodyLimit({
+      maxSize: BET_PROCESSOR_REQUEST_BODY_LIMIT_BYTES,
+      onError: (context) => context.json(RequestBodyTooLargeMessage, 413),
+    }),
+  );
 
-  app.addHook("onReady", async () => {
-    await dataSource.initialize();
-  });
-
-  app.addHook("onClose", async () => {
-    if (dataSource.isInitialized) {
-      await dataSource.destroy();
+  app.use("*", async (context, next) => {
+    switch (context.req.path) {
+      case "/aggregator/takehome/process":
+      case "/reports/rtp/users":
+      case "/reports/rtp/casino":
+        break;
+      default:
+        return next();
     }
-  });
 
-  app.addHook("preValidation", (request, reply, done) => {
+    const rawBody =
+      context.req.method === "GET"
+        ? EMPTY_BODY
+        : new Uint8Array(await context.req.raw.arrayBuffer());
+
     if (
-      !isProtectedRoute(request) ||
-      isAuthorized(request, BET_PROCESSOR_HMAC_SECRET)
+      !verifyHmacSha256Authorization(
+        rawBody,
+        BET_PROCESSOR_HMAC_SECRET,
+        context.req.header("authorization"),
+      )
     ) {
-      done();
-    } else {
-      reply.code(403).send({ message: "Forbidden" });
+      return context.json(ForbiddenMessage, 403);
     }
+
+    if (context.req.method === "POST") {
+      try {
+        context.set(
+          "requestBody",
+          JSON.parse(new TextDecoder().decode(rawBody)) as unknown,
+        );
+      } catch {
+        return context.json(InvalidRequestMessage, 400);
+      }
+    }
+
+    return next();
   });
 
-  app.removeContentTypeParser("application/json");
-  app.addContentTypeParser(
-    "application/json",
-    { parseAs: "buffer" },
-    (request, body, done) => {
-      const rawBody = typeof body === "string" ? Buffer.from(body) : body;
-      rawRequestBodies.set(request, rawBody);
-
-      try {
-        done(null, JSON.parse(rawBody.toString("utf8")) as unknown);
-      } catch (error) {
-        done(error as Error);
-      }
-    },
-  );
-
-  app.get("/health", () => ({ status: "ok" as const }));
+  app.get("/health", (context) => context.json({ status: "ok" }));
   app.get("/reports/rtp/users", createUserRtpHandler(dataSource));
   app.get("/reports/rtp/casino", createCasinoRtpHandler(dataSource));
   app.post(
