@@ -50,7 +50,7 @@ Profile: **10,000 users**, **90 concurrent workers**, **30s warmup**, **30s
 measurement**, one finished bet per request, HMAC enabled, and the full response
 body consumed by the client.
 
-| Transaction rows | Game rounds | Hot actions | Avg latency | Throughput | vs baseline |
+| Transaction rows | Game round rows | Hot action rows | Avg latency | Throughput | vs baseline |
 | ---: | ---: | ---: | ---: | ---: | ---: |
 | 0 | 0 | 0 | **56.261 ms** | **1,601.77 RPS** | baseline |
 | 10M | ~5.0M | ~1M | **60.053 ms** | **1,499.70 RPS** | −6.4% RPS |
