@@ -3,14 +3,16 @@ import { randomUUID } from "node:crypto";
 import { createSeedUserId } from "../identifiers";
 import type { ProcessAction } from "../api";
 import type { RunConfig } from "./game-runner.config";
+import { generateMultiplier } from "./game-runner.payout";
+import { createRoundRandom } from "./game-runner.random";
 
-const BET_AMOUNT = 100;
-const RTP_CYCLE_ROUNDS = 20;
-const WIN_MULTIPLIER = 19;
+export const BET_AMOUNT = 100;
 
 export function generateRound(config: RunConfig, roundIndex: number) {
-  const totalWin =
-    (roundIndex + 1) % RTP_CYCLE_ROUNDS === 0 ? BET_AMOUNT * WIN_MULTIPLIER : 0;
+  const multiplier = generateMultiplier(
+    createRoundRandom(config.namespace, roundIndex),
+  );
+  const totalWin = BET_AMOUNT * multiplier;
   const actions: ProcessAction[] = [
     { action: "bet", action_id: randomUUID(), amount: BET_AMOUNT },
   ];

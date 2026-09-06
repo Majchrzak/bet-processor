@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { sendProcessRequest } from "../api";
 import { parseRunConfig, type RunConfig } from "./game-runner.config";
+import { EXPECTED_RTP } from "./game-runner.payout";
 import { generateRound } from "./game-runner.round";
 import { verifyCasinoRtp, verifyUserRtp } from "./game-runner.rtp";
 
@@ -40,10 +41,14 @@ async function runGames(config: RunConfig) {
   let completedRounds = 0;
   let failedRounds = 0;
   let nextRound = 0;
+  let totalBet = 0;
+  let totalWin = 0;
 
   const worker = async () => {
     while (nextRound < config.rounds) {
       const round = generateRound(config, nextRound++);
+      totalBet += round.totalBet;
+      totalWin += round.totalWin;
       const succeeded = await executeRound(config, round);
 
       if (succeeded) {
@@ -63,6 +68,10 @@ async function runGames(config: RunConfig) {
   console.log(
     `Executed ${String(completedRounds)} rounds (${String(failedRounds)} failed).`,
   );
+
+  const observedRtp = totalBet === 0 ? 0 : totalWin / totalBet;
+  console.log(`Expected RTP: ${(EXPECTED_RTP * 100).toFixed(2)}%`);
+  console.log(`Observed RTP: ${(observedRtp * 100).toFixed(2)}%`);
 
   const to = new Date(Date.now() + 1);
   const casino = await verifyCasinoRtp(config, from, to);

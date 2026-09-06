@@ -17,7 +17,7 @@
     "lint": "pnpm -r lint",
     "run-game": "pnpm --filter @bet-processor/api build && pnpm --filter @bet-processor/tools build && node packages/tools/dist/main.js run",
     "seed": "pnpm --filter @bet-processor/api build && pnpm --filter @bet-processor/tools build && node packages/tools/dist/main.js seed",
-    "test": "pnpm --filter @bet-processor/api test",
+    "test": "pnpm -r test",
     "test:acceptance": "pnpm --filter @bet-processor/api test:acceptance",
     "typecheck": "pnpm -r typecheck"
   },
