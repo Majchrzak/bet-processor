@@ -15,34 +15,34 @@ time-based chunks and moved to columnstore, mutable action state is bounded by
 retention, and RTP reports use hourly and daily aggregates instead of scanning
 the complete history.
 
-**One procedure, one round trip** - `process_game_actions()` runs the full batch
-atomically (wallet lock, ordered actions, idempotency, pre-rollbacks). The API
-sends one call instead of N+1 queries per action, less pool pressure and faster
-than orchestrating the same work from Node, even in a single transaction.
+- **One procedure, one round trip** - `process_game_actions()` runs the full batch
+  atomically (wallet lock, ordered actions, idempotency, pre-rollbacks). The API
+  sends one call instead of N+1 queries per action, less pool pressure and faster
+  than orchestrating the same work from Node, even in a single transaction.
 
-**Idempotency without extras** - core tables use deterministic keys derived
-from natural identifiers (user, currency, game, action). Resubmitting the same
-action produces the same `hot_game_action` primary key. Duplicate submissions
-return the existing transaction ID and do not modify the wallet balance a
-second time. Rollbacks use the same key scheme to locate the original action.
-This requires no separate deduplication table; the only additional index
-supports rollback-before-original lookups.
+- **Idempotency without extras** - core tables use deterministic keys derived
+  from natural identifiers (user, currency, game, action). Resubmitting the same
+  action produces the same `hot_game_action` primary key. Duplicate submissions
+  return the existing transaction ID and do not modify the wallet balance a
+  second time. Rollbacks use the same key scheme to locate the original action.
+  This requires no separate deduplication table; the only additional index
+  supports rollback-before-original lookups.
 
-**Hot path, cold ledger** - recent actions read a
-small, bounded projection; the append-only ledger holds full financial history
-for RTP. Retention trims the hot store as volume grows, keeping idempotency and
-rollback lookups independent of the permanent ledger size. A daily Timescale
-job retains hot action state for 60 days after a game finishes. The game
-lifecycle and ledger remain durable.
+- **Hot path, cold ledger** - recent actions read a small, bounded projection;
+  the append-only ledger holds full financial history for RTP. Retention trims
+  the hot store as volume grows, keeping idempotency and rollback lookups
+  independent of the permanent ledger size. A daily Timescale job retains hot
+  action state for 60 days after a game finishes. The game lifecycle and ledger
+  remain durable.
 
-**Layered RTP reads** — split `[from, to)` into disjoint slices, sum each, merge.
-Most of a long window comes from pre-aggregated buckets, not a full ledger scan.
-
-1. Raw ledger - from `from` until the next hour boundary (partial start).
-2. Hourly aggregate - complete hours before the first full UTC day.
-3. Daily aggregate - complete UTC days in the middle.
-4. Hourly aggregate - complete hours after the last full UTC day.
-5. Raw ledger - from the last hour boundary to `to` (partial end).
+- **Layered RTP reads** - split `[from, to)` into disjoint slices, sum each,
+  merge. Most of a long window comes from pre-aggregated buckets, not a full
+  ledger scan:
+  1. Raw ledger - from `from` until the next hour boundary (partial start).
+  2. Hourly aggregate - complete hours before the first full UTC day.
+  3. Daily aggregate - complete UTC days in the middle.
+  4. Hourly aggregate - complete hours after the last full UTC day.
+  5. Raw ledger - from the last hour boundary to `to` (partial end).
 
 ## Performance
 
