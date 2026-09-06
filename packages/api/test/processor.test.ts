@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment -- Vitest asymmetric matchers are typed as any. */
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 
-import { getAcceptanceFixtures } from "./support/acceptance-fixtures";
+import { getFixtures } from "./fixtures";
 
 describe("bet processor HTTP integration", () => {
-  let fixtures: Awaited<ReturnType<typeof getAcceptanceFixtures>>;
+  let fixtures: Awaited<ReturnType<typeof getFixtures>>;
 
   beforeAll(async () => {
-    fixtures = await getAcceptanceFixtures();
+    fixtures = await getFixtures();
   });
 
   afterAll(async () => {

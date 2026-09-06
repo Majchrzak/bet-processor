@@ -1,14 +1,16 @@
 import { Pool } from "pg";
 import { expect } from "vitest";
 
-import { createDeterministicKey } from "../../src/deterministic-key";
-import { createHmacSha256Digest } from "../../src/hmac";
+import { createDeterministicKey } from "../src/deterministic-key";
+import { createHmacSha256Digest } from "../src/hmac";
 import {
   ErrorResponseSchema,
   ProcessorResponseSchema,
-} from "../../src/processor/contract/processor.response";
+} from "../src/processor/contract/processor.response";
+import { CasinoRtpReportResponseSchema } from "../src/rtp-casino/contract/rtp-casino.response";
+import { UserRtpReportResponseSchema } from "../src/rtp-users/contract/rtp-users.response";
 
-export async function getAcceptanceFixtures() {
+export async function getFixtures() {
   let uuidSequence = 0;
 
   const nextRandomUUID = () =>
@@ -99,6 +101,25 @@ export async function getAcceptanceFixtures() {
         };
       },
 
+      async timeWindow(userIds: string[]) {
+        const timestamps = await database.query<{
+          earliest: Date;
+          latest: Date;
+        }>(
+          `SELECT MIN(created_at) AS earliest, MAX(created_at) AS latest
+           FROM transactions
+           WHERE user_id = ANY($1::TEXT[])`,
+          [userIds],
+        );
+        const bounds = timestamps.rows[0];
+        if (!bounds) throw new Error("No transactions found for time window");
+
+        return {
+          from: new Date(bounds.earliest.getTime() - 1).toISOString(),
+          to: new Date(bounds.latest.getTime() + 1).toISOString(),
+        };
+      },
+
       signedRequest(body: {
         user: { userId: string; currency: string };
         game: { name: string; gameId?: string };
@@ -136,9 +157,44 @@ export async function getAcceptanceFixtures() {
         );
       },
 
-      async report(path: string, authorized = true) {
+      async reportUsers(
+        window: { from: string; to: string },
+        options: { limit?: string; cursor?: string; authorized?: boolean } = {},
+      ) {
+        const query = new URLSearchParams(window);
+
+        if (options.limit !== undefined) {
+          query.set("limit", options.limit);
+        }
+
+        if (options.cursor !== undefined) {
+          query.set("cursor", options.cursor);
+        }
+
         return await fetch(
-          new URL(path, apiUrl),
+          new URL(`/reports/rtp/users?${query.toString()}`, apiUrl),
+          options.authorized === false
+            ? undefined
+            : {
+                headers: {
+                  authorization: `HMAC-SHA256 ${createHmacSha256Digest(
+                    "",
+                    hmacSecret,
+                  )}`,
+                },
+              },
+        );
+      },
+
+      async reportCasino(
+        window: { from: string; to: string },
+        authorized = true,
+      ) {
+        return await fetch(
+          new URL(
+            `/reports/rtp/casino?${new URLSearchParams(window).toString()}`,
+            apiUrl,
+          ),
           authorized
             ? {
                 headers: {
@@ -165,6 +221,25 @@ export async function getAcceptanceFixtures() {
         const body = ErrorResponseSchema.parse(await response.json());
 
         expect(response.status).toEqual(400);
+        expect(body).toEqual(expected);
+      },
+
+      async userRtpReport(response: Response, expected: unknown) {
+        const body = UserRtpReportResponseSchema.parse(await response.json());
+
+        expect(response.status).toEqual(200);
+        expect(body).toEqual(expected);
+      },
+
+      async userRtpReportPage(response: Response) {
+        expect(response.status).toEqual(200);
+        return UserRtpReportResponseSchema.parse(await response.json());
+      },
+
+      async casinoRtpReport(response: Response, expected: unknown) {
+        const body = CasinoRtpReportResponseSchema.parse(await response.json());
+
+        expect(response.status).toEqual(200);
         expect(body).toEqual(expected);
       },
     },
