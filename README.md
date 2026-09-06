@@ -53,9 +53,9 @@ body consumed by the client.
 | Transaction rows | Game rounds | Hot actions | Avg latency | Throughput | vs baseline |
 | ---: | ---: | ---: | ---: | ---: | ---: |
 | 0 | 0 | 0 | **56.261 ms** | **1,601.77 RPS** | baseline |
-| 10M | ~5.0M | ~1.7M | **60.053 ms** | **1,499.70 RPS** | −6.4% RPS |
-| 50M | ~25.2M | 0 (reset) | **61.959 ms** | **1,453.80 RPS** | −9.2% RPS |
-| 100M | ~50.0M | 0 (reset) | **71.349 ms** | **1,262.97 RPS** | −21.2% RPS |
+| 10M | ~5.0M | ~1M | **60.053 ms** | **1,499.70 RPS** | −6.4% RPS |
+| 50M | ~25.2M | ~1M | **61.959 ms** | **1,453.80 RPS** | −9.2% RPS |
+| 100M | ~50.0M | ~1M | **71.349 ms** | **1,262.97 RPS** | −21.2% RPS |
 
 The tools can generate a complete synthetic dataset for local testing:
 `fixture` populates historical `game_round`, `transactions`, and recent
