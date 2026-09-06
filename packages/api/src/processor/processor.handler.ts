@@ -3,7 +3,10 @@ import type { Context } from "hono";
 import type { DataSource } from "typeorm";
 
 import { type TimeProvider } from "../time";
-import { ProcessorRequestSchema } from "./contract/processor.request";
+import {
+  ProcessorRequestSchema,
+  isProcessActionsRequest,
+} from "./contract/processor.request";
 import {
   createProcessorRepository,
   GameAlreadyFinishedDatabaseError,
@@ -32,12 +35,10 @@ export function createProcessHandler(
       return context.json(InvalidRequestMessage, 400);
     }
 
-    const body = payload.data;
-
     try {
-      const response = body.actions?.length
-        ? await repository.process(body)
-        : await repository.getBalance(body);
+      const response = isProcessActionsRequest(payload.data)
+        ? await repository.process(payload.data)
+        : await repository.getBalance(payload.data);
 
       if (!response) {
         return context.json(WalletNotFoundMessage, 404);

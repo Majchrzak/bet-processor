@@ -4,7 +4,10 @@ import { z } from "zod";
 
 import { createDeterministicKey } from "../deterministic-key";
 import type { TimeProvider } from "../time";
-import type { ProcessorRequest } from "./contract/processor.request";
+import type {
+  BalanceLookupRequest,
+  ProcessActionsRequest,
+} from "./contract/processor.request";
 import {
   ProcessorResponseSchema,
   type ProcessorResponse,
@@ -35,7 +38,7 @@ export function createProcessorRepository(
 ) {
   return {
     async getBalance(
-      request: ProcessorRequest,
+      request: BalanceLookupRequest,
     ): Promise<ProcessorResponse | undefined> {
       const rows: unknown = await dataSource.query(
         sql`
@@ -57,14 +60,8 @@ export function createProcessorRepository(
     },
 
     async process(
-      request: ProcessorRequest,
+      request: ProcessActionsRequest,
     ): Promise<ProcessorResponse | undefined> {
-      if (!request.actions?.length) {
-        throw new Error(
-          "At least one action is required for action processing",
-        );
-      }
-
       const walletId = createDeterministicKey([
         "wallet",
         request.user_id,

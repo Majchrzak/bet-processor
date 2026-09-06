@@ -8,7 +8,7 @@ import {
   InvalidRequestMessage,
   WalletNotFoundMessage,
 } from "../error";
-import type { ProcessorRequest } from "./contract/processor.request";
+import type { ProcessActionsRequest } from "./contract/processor.request";
 import { createProcessHandler } from "./processor.handler";
 import { randomUUID } from "crypto";
 
@@ -45,8 +45,8 @@ describe(createProcessHandler.name, () => {
       fixtures.given.dataSource.balance("100");
 
       const response = await fixtures.when.post({
-        ...fixtures.given.requestBody(randomUUID()),
-        actions: [],
+        user_id: "player-1",
+        currency: "USD",
       });
 
       expect(response.status).toBe(200);
@@ -83,8 +83,8 @@ describe(createProcessHandler.name, () => {
     fixtures.given.dataSource.empty();
 
     const response = await fixtures.when.post({
-      ...fixtures.given.requestBody(randomUUID()),
-      actions: undefined,
+      user_id: "player-1",
+      currency: "USD",
     });
 
     expect(response.status).toBe(404);
@@ -138,7 +138,7 @@ function getFixtures() {
 
   return {
     given: {
-      requestBody(actionId: string): ProcessorRequest {
+      requestBody(actionId: string): ProcessActionsRequest {
         return {
           user_id: "player-1",
           currency: "USD",

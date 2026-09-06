@@ -1,53 +1,146 @@
-import { describe, expect, it } from "vitest";
-import { z } from "zod";
+import { beforeEach, describe, expect, expectTypeOf, it } from "vitest";
 
 import {
   ErrorResponseSchema,
   ProcessorResponseSchema,
   type ErrorResponse,
+  type ProcessorResponse,
 } from "./processor.response";
 
-describe("ProcessorResponseSchema", () => {
-  it("accepts string transaction IDs without requiring UUIDs", () => {
-    expect(
-      ProcessorResponseSchema.parse({
-        balance: 100,
-        transactions: [{ action_id: "action-1", tx_id: "transaction-1" }],
-      }),
-    ).toEqual({
-      balance: 100,
-      transactions: [{ action_id: "action-1", tx_id: "transaction-1" }],
+describe("processor response schemas", () => {
+  let fixtures: ReturnType<typeof getFixtures>;
+
+  beforeEach(() => {
+    fixtures = getFixtures();
+  });
+
+  describe("happy path", () => {
+    it("accepts balance-only responses", () => {
+      const body = fixtures.given.balanceOnlyResponse();
+
+      fixtures.then.processorResponse.succeeds(
+        fixtures.when.parseProcessorResponse(body),
+        body,
+      );
+    });
+
+    it("accepts action responses with string transaction IDs", () => {
+      const body = fixtures.given.actionResponse();
+
+      fixtures.then.processorResponse.succeeds(
+        fixtures.when.parseProcessorResponse(body),
+        body,
+      );
+    });
+
+    it("accepts domain error responses", () => {
+      const body = fixtures.given.errorResponse();
+
+      fixtures.then.errorResponse.succeeds(
+        fixtures.when.parseErrorResponse(body),
+        body,
+      );
+      expectTypeOf(body).toEqualTypeOf<ErrorResponse>();
     });
   });
 
-  it("rejects negative and unsafe balances", () => {
-    expect(() => ProcessorResponseSchema.parse({ balance: -1 })).toThrow(
-      z.ZodError,
-    );
-    expect(() =>
-      ProcessorResponseSchema.parse({
-        balance: Number.MAX_SAFE_INTEGER + 1,
-      }),
-    ).toThrow(z.ZodError);
+  describe("processor response rejections", () => {
+    it.each([
+      ["negative balance", { balance: -1 }],
+      ["unsafe balance", { balance: Number.MAX_SAFE_INTEGER + 1 }],
+      [
+        "unknown fields",
+        {
+          balance: 100,
+          unexpected: true,
+        },
+      ],
+    ] as const)("rejects %s", (_label, body) => {
+      fixtures.then.processorResponse.fails(
+        fixtures.when.parseProcessorResponse(body),
+      );
+    });
+  });
+
+  describe("error response rejections", () => {
+    it.each([
+      ["fractional code", { code: 100.5, message: "Insufficient funds" }],
+      ["empty message", { code: 100, message: "" }],
+      [
+        "unknown fields",
+        { code: 100, message: "Insufficient funds", extra: 1 },
+      ],
+    ] as const)("rejects %s", (_label, body) => {
+      fixtures.then.errorResponse.fails(fixtures.when.parseErrorResponse(body));
+    });
   });
 });
 
-describe("ErrorResponseSchema", () => {
-  it("exposes code as an integer number", () => {
-    const response: ErrorResponse = {
-      code: 100,
-      message: "Insufficient funds",
-    };
+function getFixtures() {
+  return {
+    given: {
+      balanceOnlyResponse(): ProcessorResponse {
+        return { balance: 74322001 };
+      },
 
-    expect(ErrorResponseSchema.parse(response)).toEqual(response);
-    expect(
-      ErrorResponseSchema.parse({ code: 101, message: "Insufficient funds" }),
-    ).toEqual({ code: 101, message: "Insufficient funds" });
-    expect(() =>
-      ErrorResponseSchema.parse({
-        code: 100.5,
-        message: "Insufficient funds",
-      }),
-    ).toThrow(z.ZodError);
-  });
-});
+      actionResponse(): ProcessorResponse {
+        return {
+          balance: 100,
+          game_id: "round-1",
+          transactions: [{ action_id: "action-1", tx_id: "transaction-1" }],
+        };
+      },
+
+      errorResponse(): ErrorResponse {
+        return {
+          code: 100,
+          message: "Player has not enough funds to process an action",
+        };
+      },
+    },
+
+    when: {
+      parseProcessorResponse(body: unknown) {
+        return ProcessorResponseSchema.safeParse(body);
+      },
+
+      parseErrorResponse(body: unknown) {
+        return ErrorResponseSchema.safeParse(body);
+      },
+    },
+
+    then: {
+      processorResponse: {
+        succeeds(
+          result: ReturnType<typeof ProcessorResponseSchema.safeParse>,
+          expected: ProcessorResponse,
+        ) {
+          expect(result.success).toBe(true);
+          if (!result.success) return;
+
+          expect(result.data).toEqual(expected);
+        },
+
+        fails(result: ReturnType<typeof ProcessorResponseSchema.safeParse>) {
+          expect(result.success).toBe(false);
+        },
+      },
+
+      errorResponse: {
+        succeeds(
+          result: ReturnType<typeof ErrorResponseSchema.safeParse>,
+          expected: ErrorResponse,
+        ) {
+          expect(result.success).toBe(true);
+          if (!result.success) return;
+
+          expect(result.data).toEqual(expected);
+        },
+
+        fails(result: ReturnType<typeof ErrorResponseSchema.safeParse>) {
+          expect(result.success).toBe(false);
+        },
+      },
+    },
+  };
+}
